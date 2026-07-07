@@ -1,0 +1,338 @@
+local G = (getgenv and getgenv()) or _G
+G.__EASY_STACK = G.__EASY_STACK or {}
+local Runtime = G.__EASY_STACK
+
+local Bridge = {}
+Bridge.version = "4.0.0"
+
+local function clean(prefix)
+    return tostring(prefix or "esp")
+end
+
+function Bridge.Schema(prefix)
+    prefix = clean(prefix)
+    local p = prefix
+    return {
+        {
+            id = "combat",
+            title = "Combat",
+            Width = 250,
+            items = {
+                { kind = "section", text = "Target" },
+                { kind = "toggle", id = "tg_on", label = "Target", path = p .. ".target.on" },
+                { kind = "slider", id = "tg_fov", label = "FOV", path = p .. ".target.fov", min = 20, max = 500, step = 1 },
+                { kind = "toggle", id = "tg_fov_vis", label = "Show FOV", path = p .. ".target.showFov" },
+                { kind = "toggle", id = "tg_vis", label = "Visible Only", path = p .. ".target.visOnly" },
+                { kind = "toggle", id = "tg_allies", label = "Include Allies", path = p .. ".target.allies" },
+                { kind = "toggle", id = "tg_friends", label = "Include Friends", path = p .. ".target.friends" },
+                { kind = "toggle", id = "tg_brackets", label = "Brackets", path = p .. ".target.brackets" },
+                { kind = "toggle", id = "tg_line", label = "Snapline", path = p .. ".target.line" },
+                { kind = "section", text = "Offscreen" },
+                { kind = "toggle", id = "ar_on", label = "Arrows", path = p .. ".arrow.on" },
+                { kind = "slider", id = "ar_rad", label = "Radius", path = p .. ".arrow.rad", min = 80, max = 350, step = 1 },
+                { kind = "slider", id = "ar_size", label = "Size", path = p .. ".arrow.size", min = 8, max = 28, step = 1 },
+                { kind = "toggle", id = "ar_dist", label = "Distance Text", path = p .. ".arrow.dist" },
+            },
+        },
+        {
+            id = "visuals",
+            title = "Visuals",
+            Width = 260,
+            items = {
+                { kind = "section", text = "Box" },
+                { kind = "toggle", id = "bx_on", label = "Box", path = p .. ".box.on" },
+                { kind = "dropdown", id = "bx_kind", label = "Style", path = p .. ".box.kind", items = { "corner", "box", "3d", "3dcorner" } },
+                { kind = "dropdown", id = "bx_mode", label = "Color Mode", path = p .. ".box.mode", items = { "static", "team", "hp", "dist" } },
+                { kind = "slider", id = "bx_w", label = "Thickness", path = p .. ".box.w", min = 1, max = 4, step = 1 },
+                { kind = "toggle", id = "bx_fill", label = "Fill", path = p .. ".box.fill" },
+                { kind = "color", id = "bx_col", label = "Accent", path = p .. ".box.col" },
+                { kind = "color", id = "bx_fill_col", label = "Fill Color", path = p .. ".box.fillCol" },
+                { kind = "slider", id = "bx_fill_a", label = "Fill Alpha", path = p .. ".box.fillA", min = 0, max = 1, step = 0.01, decimals = 2 },
+                { kind = "section", text = "Extras" },
+                { kind = "toggle", id = "hp_on", label = "Health Bar", path = p .. ".hp.on" },
+                { kind = "toggle", id = "nm_on", label = "Name", path = p .. ".name.on" },
+                { kind = "toggle", id = "ds_on", label = "Distance", path = p .. ".dist.on" },
+                { kind = "toggle", id = "fg_on", label = "Flags", path = p .. ".flags.on" },
+                { kind = "toggle", id = "bn_on", label = "Bones", path = p .. ".bones.on" },
+                { kind = "toggle", id = "tr_on", label = "Tracer", path = p .. ".tracer.on" },
+                { kind = "dropdown", id = "tr_from", label = "Tracer From", path = p .. ".tracer.from", items = { "bottom", "center", "top", "mouse" } },
+                { kind = "color", id = "tr_col", label = "Tracer Color", path = p .. ".tracer.col" },
+            },
+        },
+        {
+            id = "radar",
+            title = "Radar",
+            Width = 250,
+            items = {
+                { kind = "section", text = "Radar" },
+                { kind = "toggle", id = "rd_on", label = "Enabled", path = p .. ".radar.on" },
+                { kind = "slider", id = "rd_x", label = "X", path = p .. ".radar.x", min = 0, max = 600, step = 1 },
+                { kind = "slider", id = "rd_y", label = "Y", path = p .. ".radar.y", min = 0, max = 600, step = 1 },
+                { kind = "slider", id = "rd_r", label = "Radius", path = p .. ".radar.r", min = 40, max = 160, step = 1 },
+                { kind = "slider", id = "rd_rng", label = "Range", path = p .. ".radar.range", min = 100, max = 2000, step = 10 },
+                { kind = "toggle", id = "rd_rot", label = "Rotate", path = p .. ".radar.rot" },
+                { kind = "toggle", id = "rd_names", label = "Names", path = p .. ".radar.names" },
+                { kind = "toggle", id = "rd_allies", label = "Show Allies", path = p .. ".radar.allies" },
+                { kind = "section", text = "List" },
+                { kind = "toggle", id = "ls_on", label = "Enabled", path = p .. ".list.on" },
+                { kind = "slider", id = "ls_x", label = "X", path = p .. ".list.x", min = 0, max = 700, step = 1 },
+                { kind = "slider", id = "ls_y", label = "Y", path = p .. ".list.y", min = 0, max = 700, step = 1 },
+                { kind = "slider", id = "ls_w", label = "Width", path = p .. ".list.w", min = 160, max = 360, step = 1 },
+                { kind = "slider", id = "ls_max", label = "Max Rows", path = p .. ".list.max", min = 4, max = 24, step = 1 },
+                { kind = "toggle", id = "ls_hp", label = "Health", path = p .. ".list.hp" },
+                { kind = "toggle", id = "ls_dist", label = "Distance", path = p .. ".list.dist" },
+            },
+        },
+        {
+            id = "world",
+            title = "World",
+            Width = 250,
+            items = {
+                { kind = "section", text = "Checks" },
+                { kind = "toggle", id = "tm_on", label = "Team Check", path = p .. ".team" },
+                { kind = "toggle", id = "vs_chk", label = "Visibility Check", path = p .. ".vis.check" },
+                { kind = "toggle", id = "vs_hide", label = "Hide Hidden", path = p .. ".vis.hide" },
+                { kind = "toggle", id = "vs_tint", label = "Tint Visibility", path = p .. ".vis.tint" },
+                { kind = "slider", id = "vs_pts", label = "Vis Points", path = p .. ".vis.points", min = 1, max = 5, step = 1 },
+                { kind = "section", text = "World" },
+                { kind = "toggle", id = "wr_on", label = "World Overrides", path = p .. ".world.on" },
+                { kind = "toggle", id = "wr_full", label = "Fullbright", path = p .. ".world.full" },
+                { kind = "toggle", id = "wr_fog", label = "No Fog", path = p .. ".world.noFog" },
+                { kind = "slider", id = "wr_fov", label = "FOV", path = p .. ".world.fov", min = 40, max = 120, step = 1 },
+                { kind = "slider", id = "wr_bri", label = "Brightness", path = p .. ".world.bright", min = 0, max = 5, step = 0.1, decimals = 1 },
+                { kind = "toggle", id = "wm_on", label = "Watermark", path = p .. ".self.wm.on" },
+                { kind = "toggle", id = "cp_on", label = "Compass", path = p .. ".self.compass.on" },
+                { kind = "toggle", id = "sf_on", label = "Self FOV", path = p .. ".self.fov.on" },
+                { kind = "toggle", id = "sx_on", label = "Crosshair", path = p .. ".self.cross.on" },
+            },
+        },
+        {
+            id = "config",
+            title = "Config",
+            Width = 250,
+            items = {
+                { kind = "section", text = "Theme" },
+                { kind = "dropdown", id = "ui_theme", label = "Theme", path = "bridge.theme", items = { "pastel", "carbon", "rose", "mint", "mono" } },
+                { kind = "color", id = "ui_accent", label = "Accent", path = "bridge.accent" },
+                { kind = "button", id = "ui_apply", text = "Apply Theme", onPress = function(w)
+                    local link = w.ui._espBridge
+                    if link and link.applyTheme then
+                        link:applyTheme()
+                    end
+                end },
+                { kind = "section", text = "Profiles" },
+                { kind = "dropdown", id = "esp_profile", label = "Profile", path = "bridge.profile", items = { "low", "balanced", "high" } },
+                { kind = "dropdown", id = "esp_pack", label = "Pack", path = "bridge.pack", items = { "clean", "comp", "world" } },
+                { kind = "dropdown", id = "esp_preset", label = "Preset", path = "bridge.preset", items = { "lite", "legit", "world", "full" } },
+                { kind = "button", id = "esp_apply_profile", text = "Apply ESP Setup", onPress = function(w)
+                    local link = w.ui._espBridge
+                    if link and link.applySetup then
+                        link:applySetup()
+                    end
+                end },
+                { kind = "section", text = "Files" },
+                { kind = "box", id = "cfg_name", label = "Name", path = "bridge.cfgName", default = "default", placeholder = "config name" },
+                { kind = "button", id = "cfg_save", text = "Save Pair", onPress = function(w)
+                    local link = w.ui._espBridge
+                    if link and link.save then
+                        link:save()
+                    end
+                end },
+                { kind = "button", id = "cfg_load", text = "Load Pair", onPress = function(w)
+                    local link = w.ui._espBridge
+                    if link and link.load then
+                        link:load()
+                    end
+                end },
+            },
+        },
+    }
+end
+
+function Bridge.Detach(ui)
+    local old
+    if ui ~= nil then
+        old = ui._espBridge
+    else
+        old = Runtime.bridge
+    end
+    if not old then
+        return false
+    end
+    if old.unsub then
+        for i = #old.unsub, 1, -1 do
+            local fn = old.unsub[i]
+            old.unsub[i] = nil
+            pcall(fn)
+        end
+    end
+    if old.windows then
+        for i = #old.windows, 1, -1 do
+            local w = old.windows[i]
+            old.windows[i] = nil
+            if w then
+                w:Destroy()
+            end
+        end
+    end
+    if old.prefix and old.ui then
+        old.ui:Unmount(old.prefix)
+    end
+    if old.ui then
+        old.ui:Set("bridge.esp", nil)
+        old.ui._espBridge = nil
+    end
+    if Runtime.bridge == old then
+        Runtime.bridge = nil
+    end
+    return true
+end
+
+local function bridgeMethods(link)
+    function link:sync()
+        self.ui:Sync(self.prefix)
+    end
+
+    function link:applyTheme()
+        local theme = self.ui:Get("bridge.theme", self.ui:GetThemeName())
+        local accent = self.ui:Get("bridge.accent")
+        self.ui:SetTheme(theme)
+        if accent then
+            self.ui:SetAccent(accent)
+        end
+        if self.esp and self.esp.theme then
+            self.esp:theme(theme)
+            if accent and self.esp.setAccent then
+                self.esp:setAccent(accent)
+            end
+        end
+        self:sync()
+    end
+
+    function link:applySetup()
+        if not self.esp then return false end
+        local preset = self.ui:Get("bridge.preset")
+        local profile = self.ui:Get("bridge.profile")
+        local pack = self.ui:Get("bridge.pack")
+        if preset and preset ~= "" and self.esp.preset then
+            self.esp:preset(preset)
+        else
+            if profile and self.esp.profile then self.esp:profile(profile) end
+            if pack and self.esp.pack then self.esp:pack(pack) end
+        end
+        self:sync()
+        return true
+    end
+
+    function link:save(name)
+        name = name or self.ui:Get("bridge.cfgName", "default")
+        local ok0 = self.ui:SaveConfig(name)
+        local ok1 = self.esp and self.esp.save and self.esp:save(name)
+        self.ui:Toast("Config", "Saved " .. tostring(name), 1.8, ok0 and ok1 ~= false and "ok" or "warn")
+        return ok0, ok1
+    end
+
+    function link:load(name)
+        name = name or self.ui:Get("bridge.cfgName", "default")
+        local ok0 = self.ui:LoadConfig(name)
+        local ok1 = self.esp and self.esp.load and self.esp:load(name)
+        self:applyTheme()
+        self:sync()
+        self.ui:Toast("Config", "Loaded " .. tostring(name), 1.8, ok0 and ok1 ~= false and "ok" or "warn")
+        return ok0, ok1
+    end
+
+    function link:detach()
+        return Bridge.Detach(self.ui)
+    end
+
+    return link
+end
+
+function Bridge.Attach(ui, esp, opt)
+    opt = opt or {}
+    Bridge.Detach(ui)
+    if Runtime.bridge and Runtime.bridge.ui ~= ui then
+        Bridge.Detach(Runtime.bridge.ui)
+    end
+
+    local prefix = clean(opt.prefix or "esp")
+    ui:Mount(prefix, esp.cfg)
+    ui:Set("bridge.esp", esp)
+    ui:Set("bridge.theme", ui:GetThemeName())
+    ui:Set("bridge.accent", ui:GetTheme().accent)
+    ui:Set("bridge.profile", opt.profile or "balanced")
+    ui:Set("bridge.pack", opt.pack or "clean")
+    ui:Set("bridge.preset", opt.preset or "legit")
+    ui:Set("bridge.cfgName", opt.cfgName or "default")
+
+    local wins = ui:Build(opt.schema or Bridge.Schema(prefix))
+    local link = bridgeMethods({
+        ui = ui,
+        esp = esp,
+        prefix = prefix,
+        windows = wins,
+        unsub = {},
+    })
+
+    if opt.liveTheme then
+        link.unsub[#link.unsub + 1] = ui:Watch("bridge.theme", function()
+            link:applyTheme()
+        end, false)
+        link.unsub[#link.unsub + 1] = ui:Watch("bridge.accent", function()
+            link:applyTheme()
+        end, false)
+    end
+
+    ui._espBridge = link
+    Runtime.bridge = link
+    link:sync()
+    return link
+end
+
+function Bridge.ApplyTheme(link)
+    if link and link.applyTheme then
+        return link:applyTheme()
+    end
+end
+
+function Bridge.ApplySetup(link)
+    if link and link.applySetup then
+        return link:applySetup()
+    end
+end
+
+function Bridge.Save(link, name)
+    if link and link.save then
+        return link:save(name)
+    end
+end
+
+function Bridge.Load(link, name)
+    if link and link.load then
+        return link:load(name)
+    end
+end
+
+Bridge.Toolkit = {
+    Schema = function(prefix) return Bridge.Schema(prefix) end,
+    Attach = function(ui, esp, opt) return Bridge.Attach(ui, esp, opt) end,
+    Detach = function(ui) return Bridge.Detach(ui) end,
+    ApplyTheme = function(link) return Bridge.ApplyTheme(link) end,
+    ApplySetup = function(link) return Bridge.ApplySetup(link) end,
+    Save = function(link, name) return Bridge.Save(link, name) end,
+    Load = function(link, name) return Bridge.Load(link, name) end,
+    Pair = function(UIMod, ESPMod, uiOpt, espOpt, bridgeOpt)
+        uiOpt = uiOpt or {}
+        espOpt = espOpt or {}
+        bridgeOpt = bridgeOpt or {}
+        local ui = UIMod.new(uiOpt)
+        local esp = ESPMod.new(espOpt)
+        if esp.on and espOpt.on ~= false then esp:on(true) end
+        if esp.start and bridgeOpt.start ~= false then esp:start() end
+        local link = Bridge.Attach(ui, esp, bridgeOpt)
+        return ui, esp, link
+    end,
+}
+
+return Bridge
