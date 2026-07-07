@@ -1,53 +1,75 @@
-# EasyUi
+EasyUi
+Overview
 
-## What it is
-EasyUi is a standalone multi-window cheat-style UI system.
+EasyUi is a standalone Roblox UI system built around small draggable windows, a path-based store, and optional overlays.
 
-It does not require the ESP or the bridge.
+It is meant to be easy to use in two ways:
 
-Main features:
-- draggable windows
-- compact matte/pastel theme system
-- path-based state store
-- generic table mounting
-- widgets
-- overlays / HUD
-- schema builder
-- config save/load
-- toolkit helpers
-- singleton protection so a new UI kills the previous active UI
+    quick manual setup with a few windows and widgets
+    larger schema-driven setups with mounted config tables
 
----
+It does not require EasyESP.
 
-## Basic setup
+Default menu key:
 
-```lua
-local UI = require(path.To.EasyUi)
+Lua
 
-local ui = UI.new({
+Enum.KeyCode.LeftAlt
+
+Default watermark state:
+
+    off
+
+Quick start
+
+Lua
+
+local EasyUi = require(path.To.EasyUi)
+
+local ui = EasyUi.new({
     Title = "My Menu",
     Theme = "pastel",
-    MenuKey = Enum.KeyCode.LeftAlt,
     Visible = true,
-    Signature = "MyMenu"
+    Signature = "MyMenu",
 })
-```
 
-Destroy it:
+local combat = ui:Window("combat", "Combat", { Width = 260 })
 
-```lua
-ui:Destroy()
-```
+combat:Toggle("aim_on", {
+    label = "Aimbot",
+    path = "combat.aimbot.on",
+    default = false,
+})
 
----
+combat:Slider("fov", {
+    label = "FOV",
+    path = "combat.aimbot.fov",
+    min = 20,
+    max = 400,
+    step = 1,
+    default = 120,
+})
 
-## Constructor options
+combat:Button("save", "Save Config", {
+    onPress = function()
+        ui:SaveConfig("default")
+    end,
+})
 
-```lua
-local ui = UI.new({
+Constructor
+
+Lua
+
+local ui = EasyUi.new(options)
+
+Common options
+
+Lua
+
+local ui = EasyUi.new({
     Title = "My Menu",
     Theme = "pastel",
-    ThemeOverride = {},
+    ThemeOverride = nil,
     Accent = Color3.fromRGB(192, 154, 255),
     MenuKey = Enum.KeyCode.LeftAlt,
     Visible = true,
@@ -56,71 +78,72 @@ local ui = UI.new({
     StartX = 16,
     StartY = 54,
     WindowMaxHeight = 420,
+    Watermark = false,
 })
-```
 
----
+Notes
 
-## Core UI control
+    creating a new EasyUi instance destroys the previous active EasyUi instance
+    gethui() is used when available
+    the UI creates its own internal container for safe extension content
 
-```lua
+Core control
+
+Lua
+
 ui:SetVisible(true)
 ui:GetVisible()
 ui:Toggle()
 ui:SetMenuKey(Enum.KeyCode.Insert)
-```
+ui:Destroy()
 
----
+Destroy all active UI instances:
 
-## Themes
+Lua
 
-```lua
+EasyUi.DestroyAll()
+
+Themes
+Change theme or accent
+
+Lua
+
 ui:SetTheme("carbon")
 ui:SetAccent(Color3.fromRGB(120, 200, 255))
 ui:ApplyTheme()
-```
 
-### Theme helpers
+Theme helpers
 
-```lua
-print(table.concat(UI.GetThemes(), ", "))
-local pastel = UI.GetTheme("pastel")
-UI.AddTheme("mytheme", palette)
-```
+Lua
 
----
+print(table.concat(EasyUi.GetThemes(), ", "))
+local pastel = EasyUi.GetTheme("pastel")
+EasyUi.AddTheme("mytheme", palette)
 
-## Internal container
+Store and mounting
 
-EasyUi creates its own container inside the `ScreenGui`.
-Use it if you want a safe place for custom extension content.
+The UI uses a path-based store. That is the main reason it stays manageable when the setup gets bigger.
+Direct get/set
 
-```lua
-local container = ui:GetContainer()
-```
+Lua
 
----
-
-## State store
-
-Widgets bind to paths, not widget order.
-
-### Direct store use
-
-```lua
 ui:Set("combat.aimbot.on", true)
 print(ui:Get("combat.aimbot.on"))
 
-local stop = ui:Watch("combat.aimbot.on", function(value)
-    print("new value", value)
+Watch a path
+
+Lua
+
+local unwatch = ui:Watch("combat.aimbot.on", function(value)
+    print("new value:", value)
 end, true)
 
-stop()
-```
+unwatch()
 
-### Mount an external table
+Mount an external table
 
-```lua
+Lua
+
 local cfg = {
     movement = {
         speed = 16,
@@ -131,108 +154,110 @@ local cfg = {
 ui:Mount("cfg", cfg)
 ui:Set("cfg.movement.fly", true)
 print(cfg.movement.fly)
-```
 
-Unmount:
+Unmount it:
 
-```lua
+Lua
+
 ui:Unmount("cfg")
-```
 
-### Sync widgets from store
+Sync widgets from store
 
-```lua
+Lua
+
 ui:Sync()
 ui:Sync("cfg")
-```
 
----
+Windows
+Create a window
 
-## Windows
+Lua
 
-### Create a window
-
-```lua
-local combat = ui:Window("combat", "Combat", {
-    Width = 250,
-    X = 20,
-    Y = 60,
+local win = ui:Window("combat", "Combat", {
+    Width = 260,
+    X = 18,
+    Y = 72,
     Open = true,
     MaxHeight = 420,
 })
-```
 
 Aliases:
 
-```lua
+Lua
+
 ui:CreateWindow("combat", "Combat", opt)
 ui:CreatePanel("Combat", opt)
-```
 
-### Window methods
+Window methods
 
-```lua
-combat:SetTitle("Combat Settings")
-combat:SetVisible(true)
-combat:Open()
-combat:Close()
-combat:ToggleOpen()
-combat:Destroy()
-```
+Lua
 
-### Window lookups
+win:SetTitle("Combat Settings")
+win:SetVisible(true)
+win:Open()
+win:Close()
+win:ToggleOpen()
+win:Destroy()
 
-```lua
+Window lookups
+
+Lua
+
 ui:GetWindows()
 ui:GetWindow("combat")
-```
 
----
+Dragging behavior
 
-## Widgets
+    left click and drag the header to move a window
+    middle click and drag anywhere on the window to move it
+    middle click and drag overlays too
+    the last interacted window comes to the front
+    overlapping windows are auto-resolved on build/import/resize
 
-## Section
+Widgets
+Section
 
-```lua
-combat:Section("Aim")
-combat:AddSeparator("Aim")
-```
+Lua
 
-## Label
+win:Section("Aim")
+win:AddSeparator("Aim")
 
-```lua
-local lbl = combat:Label("status", "Ready")
+Label
+
+Lua
+
+local lbl = win:Label("status", "Ready")
 lbl:set("Running")
-```
 
 Old helper:
 
-```lua
-combat:AddLabel("Ready")
-```
+Lua
 
-## Button
+win:AddLabel("Ready")
 
-```lua
-combat:Button("save_btn", "Save", {
+Button
+
+Lua
+
+win:Button("save_btn", "Save", {
     onPress = function()
         print("save")
     end,
 })
-```
 
 Old helper:
 
-```lua
-combat:AddButton("Save", function()
+Lua
+
+win:AddButton("Save", function()
     print("save")
 end)
-```
 
-## Toggle
+Toggle
 
-```lua
-combat:Toggle("aim_on", {
+Lua
+
+win:Toggle("aim_on", {
     label = "Aimbot",
     path = "combat.aimbot.on",
     default = false,
@@ -240,79 +265,63 @@ combat:Toggle("aim_on", {
         print(v)
     end,
 })
-```
 
 Old helper:
 
-```lua
-combat:AddToggle("Aimbot", false, function(v)
+Lua
+
+win:AddToggle("Aimbot", false, function(v)
     print(v)
 end)
-```
 
-## Slider
+Slider
 
-```lua
-combat:Slider("fov", {
+Lua
+
+win:Slider("fov", {
     label = "FOV",
-    path = "combat.fov",
+    path = "combat.aimbot.fov",
     min = 20,
     max = 400,
     step = 1,
     default = 120,
 })
-```
 
 Old helper:
 
-```lua
-combat:AddSlider("FOV", 20, 400, 120, 1, function(v)
+Lua
+
+win:AddSlider("FOV", 20, 400, 120, 1, function(v)
     print(v)
 end)
-```
 
-## Dropdown
+Dropdown
 
-```lua
-combat:Dropdown("part", {
+Lua
+
+win:Dropdown("part", {
     label = "Hit Part",
-    path = "combat.part",
+    path = "combat.aimbot.part",
     items = { "Head", "Torso", "Root" },
     default = "Head",
 })
-```
 
-Old helper:
+Mode switch
 
-```lua
-combat:AddDropdown("Hit Part", { "Head", "Torso" }, "Head", function(v)
-    print(v)
-end)
-```
+Lua
 
-## Mode switch
-
-```lua
-combat:Mode("mode", {
+win:Mode("mode", {
     label = "Mode",
     path = "combat.mode",
     items = { "Legit", "Rage", "Silent" },
     default = "Legit",
 })
-```
 
-Old helper:
+Keybind
 
-```lua
-combat:AddModeToggle("Mode", { "Legit", "Rage" }, "Legit", function(v)
-    print(v)
-end)
-```
+Lua
 
-## Keybind
-
-```lua
-combat:Keybind("key", {
+win:Keybind("key", {
     label = "Hotkey",
     path = "combat.key",
     default = Enum.KeyCode.Q,
@@ -320,20 +329,12 @@ combat:Keybind("key", {
         print("pressed", key)
     end,
 })
-```
 
-Old helper:
+Text box
 
-```lua
-combat:AddKeybind("Hotkey", Enum.KeyCode.Q, function(key)
-    print(key)
-end)
-```
+Lua
 
-## Text box
-
-```lua
-combat:Box("name", {
+win:Box("name", {
     label = "Config Name",
     path = "config.name",
     default = "default",
@@ -342,65 +343,38 @@ combat:Box("name", {
         print(text)
     end,
 })
-```
 
-Old helper:
+Color picker
 
-```lua
-combat:AddTextBox("Config Name", "default", "name", function(text)
-    print(text)
-end)
-```
+Lua
 
-## Color picker
-
-```lua
-combat:Color("accent", {
+win:Color("accent", {
     label = "Accent",
     path = "ui.accent",
     default = Color3.fromRGB(192, 154, 255),
 })
-```
 
-Old helper:
+Meter / progress
 
-```lua
-combat:AddColorPicker("Accent", Color3.fromRGB(192, 154, 255), function(c)
-    print(c)
-end)
-```
+Lua
 
-## Meter / progress
-
-```lua
-combat:Meter("load", {
+win:Meter("load", {
     label = "Load",
     path = "stats.load",
     default = 0.25,
 })
-```
 
-Old helper:
+Custom widgets
+Direct custom widget
 
-```lua
-combat:AddProgressBar("Load", 0.25, function(v)
-    print(v)
-end)
-```
+Lua
 
----
-
-## Custom widgets
-
-### New-style
-
-```lua
-combat:Custom("custom_widget", function(win, id, opt)
-    local tk = win.ui.Toolkit
+win:Custom("custom_widget", function(win0, id, opt)
+    local tk = win0.ui.Toolkit
     local row = tk.Create("Frame", {
         Size = UDim2.new(1, 0, 0, 24),
         BackgroundTransparency = 1,
-    }, win.body)
+    }, win0.body)
 
     local lbl = tk.Create("TextLabel", {
         Size = UDim2.new(1, 0, 1, 0),
@@ -408,7 +382,7 @@ combat:Custom("custom_widget", function(win, id, opt)
         Text = "Custom",
         Font = Enum.Font.Gotham,
         TextSize = 12,
-        TextColor3 = win.ui:GetTheme().text,
+        TextColor3 = win0.ui:GetTheme().text,
     }, row)
 
     return {
@@ -418,16 +392,16 @@ combat:Custom("custom_widget", function(win, id, opt)
         value = "Custom",
         get = function(self) return self.value end,
         set = function(self, v) self.value = v; lbl.Text = tostring(v) end,
-        applyTheme = function(self) lbl.TextColor3 = win.ui:GetTheme().text end,
+        applyTheme = function(self) lbl.TextColor3 = win0.ui:GetTheme().text end,
         destroy = function(self) row:Destroy() end,
     }
 end)
-```
 
-### Compatibility-style `AddCustom`
+Compatibility-style AddCustom
 
-```lua
-combat:AddCustom(function(win, ctx)
+Lua
+
+win:AddCustom(function(win0, ctx)
     local row = ctx.mk("Frame", {
         Size = UDim2.new(1, 0, 0, 22),
         BackgroundTransparency = 1,
@@ -449,17 +423,15 @@ combat:AddCustom(function(win, ctx)
         value = "Custom",
         get = function(self) return self.value end,
         set = function(self, v) self.value = v; lbl.Text = tostring(v) end,
-        applyTheme = function(self) lbl.TextColor3 = win.ui:GetTheme().text end,
+        applyTheme = function(self) lbl.TextColor3 = win0.ui:GetTheme().text end,
         destroy = function(self) row:Destroy() end,
     }
 end)
-```
 
----
+Build from schema
 
-## Schema builder
+Lua
 
-```lua
 ui:Build({
     {
         id = "visuals",
@@ -473,36 +445,33 @@ ui:Build({
         },
     },
 })
-```
 
----
+Overlays / HUD
+Create an overlay
 
-## Overlays / HUD
+Lua
 
-### Create overlay
-
-```lua
 local ov = ui:Overlay("status", {
     x = 20,
     y = 20,
     w = 180,
-    h = 32,
+    h = 28,
 })
 
 local frame = ov:GetFrame()
-```
 
-### Builder helper
+Builder helper
 
-```lua
-ui:AddOverlay("hud_info", function(ov, ui, tk)
+Lua
+
+ui:AddOverlay("hud_info", function(ov, ui0, tk)
     tk.Create("TextLabel", {
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
         Text = "HUD INFO",
         Font = Enum.Font.Gotham,
         TextSize = 12,
-        TextColor3 = ui:GetTheme().text,
+        TextColor3 = ui0:GetTheme().text,
     }, ov:GetFrame())
 end, {
     x = 20,
@@ -510,141 +479,144 @@ end, {
     w = 160,
     h = 28,
 })
-```
 
-### Overlay lookup
+Overlay lookup
 
-```lua
+Lua
+
 ui:GetOverlay("status")
-```
 
----
+Watermark and toasts
+Watermark
 
-## Watermark and toasts
+Lua
 
-### Watermark
-
-```lua
 ui:SetWatermark(function()
     return "My Menu | " .. os.date("%X")
 end)
 
 ui:SetWatermarkVisible(true)
-```
 
-### Toasts
+Toasts
 
-```lua
+Lua
+
 ui:Toast("Loaded", "UI is ready", 2, "ok")
 ui:Toast("Warning", "Check settings", 2, "warn")
 ui:Toast("Error", "Something failed", 2, "err")
-```
 
----
+Configs
+JSON export / import
 
-## Configs
+Lua
 
-### JSON export / import
-
-```lua
 local data = ui:ExportConfig()
 ui:ImportConfig(data)
-```
 
-### File save / load
+File save / load
 
-```lua
+Lua
+
 ui:SaveConfig("legit")
 ui:LoadConfig("legit")
 ui:DeleteConfig("legit")
 print(table.concat(ui:ListConfigs(), ", "))
-```
 
-### Autoload
+Autoload
 
-```lua
+Lua
+
 ui:SetAutoload("legit")
 ui:LoadAutoload()
-```
 
----
+Plugins and extension
+Register a custom widget builder
 
-## Plugins and extensions
+Lua
 
-### Register widget
-
-```lua
-UI.RegisterWidget("mywidget", function(win, id, opt)
-    -- return widget object
+EasyUi.RegisterWidget("mywidget", function(win, id, opt)
+    -- return widget
 end)
-```
 
-### Register plugin
+Register a plugin
 
-```lua
-UI.RegisterPlugin("debug_panel", function(ui)
+Lua
+
+EasyUi.RegisterPlugin("debug_panel", function(ui)
     local win = ui:Window("debug", "Debug")
     win:Label("status", "Ready")
     return win
 end)
-```
 
 Use it:
 
-```lua
+Lua
+
 ui:Use("debug_panel")
-```
 
-### Extend directly
+Extend directly
 
-```lua
+Lua
+
 ui:Extend(function(self)
     self:Toast("Extend", "Called", 1.5, "ok")
 end)
-```
 
----
+Toolkit
 
-## Toolkit
+Lua
 
-```lua
-local Toolkit = UI.Toolkit
-```
+local Toolkit = EasyUi.Toolkit
 
-### Helpers
+Helpers
 
-- `Toolkit.Create`
-- `Toolkit.Corner`
-- `Toolkit.Padding`
-- `Toolkit.Stroke`
-- `Toolkit.Tween`
-- `Toolkit.Themes`
-- `Toolkit.PathGet`
-- `Toolkit.PathSet`
-- `Toolkit.PathToggle`
-- `Toolkit.Pack`
-- `Toolkit.Unpack`
-- `Toolkit.ThemeOf`
-- `Toolkit.Color`
-- `Toolkit.Dim`
-- `Toolkit.RegisterWidget`
-- `Toolkit.RegisterPlugin`
-- `Toolkit.CleanName`
-- `Toolkit.Build(ui, schema)`
-- `Toolkit.Overlay(ui, id, opt)`
-- `Toolkit.Watch(ui, path, fn, fire)`
-- `Toolkit.Bind(ui, path, value)`
-- `Toolkit.Mount(ui, name, root)`
-- `Toolkit.GetWindow(ui, id)`
-- `Toolkit.GetWidget(ui, id)`
-- `Toolkit.GetOverlay(ui, id)`
-- `Toolkit.GetContainer(ui)`
+    Toolkit.Create
+    Toolkit.Corner
+    Toolkit.Padding
+    Toolkit.Stroke
+    Toolkit.Tween
+    Toolkit.Themes
+    Toolkit.PathGet
+    Toolkit.PathSet
+    Toolkit.PathToggle
+    Toolkit.Pack
+    Toolkit.Unpack
+    Toolkit.ThemeOf
+    Toolkit.Color
+    Toolkit.Dim
+    Toolkit.RegisterWidget
+    Toolkit.RegisterPlugin
+    Toolkit.CleanName
+    Toolkit.Build(ui, schema)
+    Toolkit.Overlay(ui, id, opt)
+    Toolkit.Watch(ui, path, fn, fire)
+    Toolkit.Bind(ui, path, value)
+    Toolkit.Mount(ui, name, root)
+    Toolkit.GetWindow(ui, id)
+    Toolkit.GetWidget(ui, id)
+    Toolkit.GetOverlay(ui, id)
+    Toolkit.GetContainer(ui)
 
----
+Setup check
 
-## Potassium notes
+EasyUi is streamlined in a useful way:
+Fast setup
 
-EasyUi already prefers Potassium’s hidden GUI path when `gethui()` exists.
-That keeps menu content inside a hidden executor-owned container instead of relying only on `CoreGui`/`PlayerGui`.
+If you just want a menu:
 
-The singleton guard also uses the shared executor global to prevent stacked UI instances when re-executed.
+    new()
+    Window()
+    a few widgets
+
+Scalable setup
+
+If you want a bigger system:
+
+    Mount
+    path-bound widgets
+    Build(schema)
+    overlays
+    plugins
+    custom widgets
+
+That means it is easy to add/remove features without rewriting everything.
