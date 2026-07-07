@@ -2652,6 +2652,9 @@ function UI.GetThemes()
 end
 
 function UI.GetTheme(name)
+    if type(name) == "table" and name.theme ~= nil then
+        return name.theme
+    end
     return Themes[name]
 end
 
