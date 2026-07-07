@@ -376,7 +376,7 @@ function Router.new(ui)
             local p = ui._popup
             local owner = ui._popupOwner
             local function inside(gui)
-                if not gui or not gui.Parent then
+                if typeof(gui) ~= "Instance" or not gui.Parent or not gui:IsA("GuiObject") then
                     return false
                 end
                 local a = gui.AbsolutePosition
@@ -1728,7 +1728,7 @@ function UI.new(opt)
     self.sig = opt.Signature or self.title
     self.themeName = opt.Theme or "pastel"
     self.theme = themeOf(self.themeName, opt.ThemeOverride, opt.Accent)
-    self.menuKey = opt.MenuKey or Enum.KeyCode.RightShift
+    self.menuKey = opt.MenuKey or Enum.KeyCode.LeftAlt
     self.visible = opt.Visible ~= false
     self.maxH = opt.WindowMaxHeight or 420
     self.store = Store.new()
