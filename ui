@@ -159,89 +159,121 @@ local function stroke(c, w, a, parent)
 end
 
 local function tween(obj, dur, props, style, dir)
-    local info = TweenInfo.new(dur or 0.12, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out)
+    local info = TweenInfo.new(dur or 0.14, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out)
     local tw = Tween:Create(obj, info, props)
     tw:Play()
     return tw
 end
 
+local function bindFreeDrag(ui, key, gui, getRect, setPos)
+    local dragging = false
+    local offX, offY
+    local dragTw
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton3 then
+            return
+        end
+        local x, y = getRect()
+        offX = input.Position.X - x
+        offY = input.Position.Y - y
+        dragging = true
+        ui.router:capture(key, {
+            changed = function(i)
+                if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+                    local nx = i.Position.X - offX
+                    local ny = i.Position.Y - offY
+                    if dragTw then pcall(function() dragTw:Cancel() end) end
+                    dragTw = setPos(nx, ny)
+                end
+            end,
+            ended = function(i)
+                if dragging and i.UserInputType == Enum.UserInputType.MouseButton3 then
+                    dragging = false
+                    if dragTw then pcall(function() dragTw:Cancel() end) end
+                    ui.router:release(key)
+                end
+            end,
+        })
+    end)
+end
+
 local Themes = {
     pastel = {
-        bg0 = Color3.fromRGB(14, 15, 18),
-        bg1 = Color3.fromRGB(20, 21, 24),
-        bg2 = Color3.fromRGB(27, 28, 32),
-        bg3 = Color3.fromRGB(34, 36, 40),
-        line = Color3.fromRGB(52, 54, 60),
-        lineHi = Color3.fromRGB(82, 85, 95),
-        text = Color3.fromRGB(239, 241, 246),
-        sub = Color3.fromRGB(178, 182, 191),
-        dim = Color3.fromRGB(118, 122, 132),
-        accent = Color3.fromRGB(192, 154, 255),
-        accentSoft = Color3.fromRGB(92, 76, 122),
+        bg0 = Color3.fromRGB(16, 14, 20),
+        bg1 = Color3.fromRGB(24, 21, 29),
+        bg2 = Color3.fromRGB(31, 28, 37),
+        bg3 = Color3.fromRGB(40, 36, 48),
+        line = Color3.fromRGB(70, 62, 84),
+        lineHi = Color3.fromRGB(108, 96, 128),
+        text = Color3.fromRGB(242, 241, 247),
+        sub = Color3.fromRGB(188, 184, 198),
+        dim = Color3.fromRGB(128, 124, 138),
+        accent = Color3.fromRGB(202, 164, 255),
+        accentSoft = Color3.fromRGB(106, 82, 138),
         good = Color3.fromRGB(132, 229, 174),
         warn = Color3.fromRGB(255, 205, 118),
         bad = Color3.fromRGB(255, 118, 138),
     },
     carbon = {
-        bg0 = Color3.fromRGB(12, 13, 16),
-        bg1 = Color3.fromRGB(18, 20, 23),
-        bg2 = Color3.fromRGB(24, 26, 30),
-        bg3 = Color3.fromRGB(31, 34, 39),
-        line = Color3.fromRGB(48, 53, 60),
-        lineHi = Color3.fromRGB(78, 86, 98),
-        text = Color3.fromRGB(232, 236, 242),
-        sub = Color3.fromRGB(176, 182, 191),
-        dim = Color3.fromRGB(116, 121, 129),
+        bg0 = Color3.fromRGB(11, 15, 20),
+        bg1 = Color3.fromRGB(17, 23, 30),
+        bg2 = Color3.fromRGB(24, 31, 40),
+        bg3 = Color3.fromRGB(33, 42, 53),
+        line = Color3.fromRGB(55, 68, 82),
+        lineHi = Color3.fromRGB(87, 108, 128),
+        text = Color3.fromRGB(232, 238, 244),
+        sub = Color3.fromRGB(174, 184, 194),
+        dim = Color3.fromRGB(114, 124, 136),
         accent = Color3.fromRGB(118, 201, 255),
-        accentSoft = Color3.fromRGB(60, 95, 120),
+        accentSoft = Color3.fromRGB(56, 96, 124),
         good = Color3.fromRGB(136, 230, 174),
         warn = Color3.fromRGB(255, 196, 115),
         bad = Color3.fromRGB(255, 110, 125),
     },
     rose = {
-        bg0 = Color3.fromRGB(16, 13, 16),
-        bg1 = Color3.fromRGB(23, 18, 22),
-        bg2 = Color3.fromRGB(30, 24, 29),
-        bg3 = Color3.fromRGB(38, 30, 36),
-        line = Color3.fromRGB(60, 49, 58),
-        lineHi = Color3.fromRGB(92, 76, 88),
-        text = Color3.fromRGB(244, 236, 241),
-        sub = Color3.fromRGB(188, 173, 182),
-        dim = Color3.fromRGB(126, 111, 119),
+        bg0 = Color3.fromRGB(20, 13, 18),
+        bg1 = Color3.fromRGB(30, 19, 27),
+        bg2 = Color3.fromRGB(39, 26, 35),
+        bg3 = Color3.fromRGB(48, 33, 44),
+        line = Color3.fromRGB(82, 58, 72),
+        lineHi = Color3.fromRGB(124, 88, 108),
+        text = Color3.fromRGB(245, 236, 242),
+        sub = Color3.fromRGB(193, 174, 185),
+        dim = Color3.fromRGB(133, 114, 124),
         accent = Color3.fromRGB(255, 142, 186),
-        accentSoft = Color3.fromRGB(122, 70, 94),
+        accentSoft = Color3.fromRGB(136, 74, 102),
         good = Color3.fromRGB(142, 229, 176),
         warn = Color3.fromRGB(255, 197, 118),
         bad = Color3.fromRGB(255, 115, 130),
     },
     mint = {
-        bg0 = Color3.fromRGB(12, 16, 15),
-        bg1 = Color3.fromRGB(18, 23, 22),
-        bg2 = Color3.fromRGB(24, 31, 29),
-        bg3 = Color3.fromRGB(31, 39, 37),
-        line = Color3.fromRGB(48, 60, 57),
-        lineHi = Color3.fromRGB(76, 95, 90),
+        bg0 = Color3.fromRGB(12, 18, 16),
+        bg1 = Color3.fromRGB(18, 28, 25),
+        bg2 = Color3.fromRGB(24, 37, 33),
+        bg3 = Color3.fromRGB(31, 47, 42),
+        line = Color3.fromRGB(52, 75, 68),
+        lineHi = Color3.fromRGB(82, 116, 104),
         text = Color3.fromRGB(232, 244, 240),
-        sub = Color3.fromRGB(172, 186, 181),
-        dim = Color3.fromRGB(112, 124, 121),
+        sub = Color3.fromRGB(172, 188, 182),
+        dim = Color3.fromRGB(112, 128, 122),
         accent = Color3.fromRGB(125, 236, 196),
-        accentSoft = Color3.fromRGB(58, 103, 89),
+        accentSoft = Color3.fromRGB(54, 110, 92),
         good = Color3.fromRGB(128, 234, 173),
         warn = Color3.fromRGB(255, 204, 120),
         bad = Color3.fromRGB(255, 118, 122),
     },
     mono = {
         bg0 = Color3.fromRGB(10, 10, 10),
-        bg1 = Color3.fromRGB(18, 18, 18),
-        bg2 = Color3.fromRGB(26, 26, 26),
-        bg3 = Color3.fromRGB(34, 34, 34),
-        line = Color3.fromRGB(54, 54, 54),
-        lineHi = Color3.fromRGB(86, 86, 86),
-        text = Color3.fromRGB(242, 242, 242),
-        sub = Color3.fromRGB(180, 180, 180),
-        dim = Color3.fromRGB(118, 118, 118),
+        bg1 = Color3.fromRGB(20, 20, 20),
+        bg2 = Color3.fromRGB(30, 30, 30),
+        bg3 = Color3.fromRGB(42, 42, 42),
+        line = Color3.fromRGB(62, 62, 62),
+        lineHi = Color3.fromRGB(98, 98, 98),
+        text = Color3.fromRGB(244, 244, 244),
+        sub = Color3.fromRGB(186, 186, 186),
+        dim = Color3.fromRGB(124, 124, 124),
         accent = Color3.fromRGB(232, 232, 232),
-        accentSoft = Color3.fromRGB(82, 82, 82),
+        accentSoft = Color3.fromRGB(92, 92, 92),
         good = Color3.fromRGB(196, 196, 196),
         warn = Color3.fromRGB(225, 225, 225),
         bad = Color3.fromRGB(140, 140, 140),
@@ -371,7 +403,7 @@ function Router.new(ui)
             return
         end
 
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton3 or input.UserInputType == Enum.UserInputType.Touch then
             local win = ui:_windowAt(input.Position)
             if win then
                 ui:_front(win)
@@ -596,7 +628,7 @@ local function label(parent, text, theme, size, pos, width, z, align, color)
     return mk("TextLabel", {
         Text = text or "",
         Font = Enum.Font.Gotham,
-        TextSize = size or 12,
+        TextSize = size or 13,
         TextColor3 = color or theme.text,
         BackgroundTransparency = 1,
         Size = width or UDim2.new(1, 0, 1, 0),
@@ -611,7 +643,7 @@ local function buttonText(parent, text, theme, size, z)
     local b = mk("TextButton", {
         Text = text or "",
         Font = Enum.Font.Gotham,
-        TextSize = size or 11,
+        TextSize = size or 12,
         TextColor3 = theme.text,
         AutoButtonColor = false,
         BackgroundTransparency = 1,
@@ -650,7 +682,7 @@ function Widgets.section(win, id, opt)
         ZIndex = row.ZIndex + 1,
     }, row)
     corner(2, bar)
-    label(row, opt.text or opt.label or id or "", t, 10, UDim2.new(0, 8, 0, 0), UDim2.new(1, -8, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.dim)
+    label(row, opt.text or opt.label or id or "", t, 11, UDim2.new(0, 8, 0, 0), UDim2.new(1, -8, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.dim)
     local w = Widget.new(win, id or cleanName(opt.text), "section", opt)
     w.row = row
     function w:render() end
@@ -663,7 +695,7 @@ function Widgets.label(win, id, opt)
     local lbl = mk("TextLabel", {
         Text = opt.text or "",
         Font = Enum.Font.Gotham,
-        TextSize = opt.size or 12,
+        TextSize = opt.size or 13,
         TextColor3 = opt.color or t.sub,
         BackgroundTransparency = 1,
         AutomaticSize = Enum.AutomaticSize.Y,
@@ -687,7 +719,7 @@ function Widgets.button(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 26)
     local shell = makeField(row, t, UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0.5, 0), Vector2.new(0, 0.5), row.ZIndex + 1)
-    local b = buttonText(shell, opt.text or opt.label or id or "Button", t, 11, shell.ZIndex + 1)
+    local b = buttonText(shell, opt.text or opt.label or id or "Button", t, 12, shell.ZIndex + 1)
     local w = Widget.new(win, id or cleanName(opt.text or "button"), "button", opt)
     w.row = row
     w:own(b.MouseEnter:Connect(function()
@@ -722,7 +754,7 @@ end
 function Widgets.toggle(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 24)
-    label(row, opt.label or id or "Toggle", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(1, -62, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    label(row, opt.label or id or "Toggle", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(1, -62, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
     local shell = makeField(row, t, UDim2.new(0, 38, 0, 16), UDim2.new(1, 0, 0.5, 0), Vector2.new(1, 0.5), row.ZIndex + 1)
     corner(8, shell)
     local knob = mk("Frame", {
@@ -777,8 +809,8 @@ end
 function Widgets.slider(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 36)
-    label(row, opt.label or id or "Slider", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(0.65, 0, 0, 14), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
-    local valueLbl = label(row, "", t, 11, UDim2.new(0.65, 0, 0, 0), UDim2.new(0.35, 0, 0, 14), row.ZIndex + 1, Enum.TextXAlignment.Right, t.sub)
+    label(row, opt.label or id or "Slider", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(0.65, 0, 0, 14), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    local valueLbl = label(row, "", t, 12, UDim2.new(0.65, 0, 0, 0), UDim2.new(0.35, 0, 0, 14), row.ZIndex + 1, Enum.TextXAlignment.Right, t.sub)
     local track = makeField(row, t, UDim2.new(1, 0, 0, 6), UDim2.new(0, 0, 1, -4), Vector2.new(0, 1), row.ZIndex + 1)
     corner(3, track)
     local fill = mk("Frame", {
@@ -898,9 +930,9 @@ end
 function Widgets.dropdown(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 24)
-    label(row, opt.label or id or "Dropdown", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(1, -120, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    label(row, opt.label or id or "Dropdown", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(1, -120, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
     local shell = makeField(row, t, UDim2.new(0, 112, 1, 0), UDim2.new(1, 0, 0.5, 0), Vector2.new(1, 0.5), row.ZIndex + 1)
-    local txt = label(shell, "", t, 11, UDim2.new(0, 8, 0, 0), UDim2.new(1, -24, 1, 0), shell.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    local txt = label(shell, "", t, 12, UDim2.new(0, 8, 0, 0), UDim2.new(1, -24, 1, 0), shell.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
     local arrow = label(shell, "▾", t, 10, UDim2.new(1, -15, 0, 0), UDim2.new(0, 14, 1, 0), shell.ZIndex + 1, Enum.TextXAlignment.Center, t.dim)
     local hit = buttonText(shell, "", t, 11, shell.ZIndex + 2)
     local w = Widget.new(win, id or cleanName(opt.label), "dropdown", opt)
@@ -986,7 +1018,7 @@ end
 function Widgets.mode(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 36)
-    label(row, opt.label or id or "Mode", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 14), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    label(row, opt.label or id or "Mode", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 14), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
     local items = opt.items or opt.options or {}
     local track = makeField(row, t, UDim2.new(1, 0, 0, 18), UDim2.new(0, 0, 1, -2), Vector2.new(0, 1), row.ZIndex + 1)
     corner(5, track)
@@ -1006,7 +1038,7 @@ function Widgets.mode(win, id, opt)
         local btn = mk("TextButton", {
             Text = tostring(item),
             Font = Enum.Font.Gotham,
-            TextSize = 10,
+            TextSize = 11,
             TextColor3 = i == 1 and t.text or t.dim,
             BackgroundTransparency = 1,
             AutoButtonColor = false,
@@ -1064,9 +1096,9 @@ end
 function Widgets.keybind(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 24)
-    label(row, opt.label or id or "Keybind", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(1, -90, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    label(row, opt.label or id or "Keybind", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(1, -90, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
     local shell = makeField(row, t, UDim2.new(0, 84, 1, 0), UDim2.new(1, 0, 0.5, 0), Vector2.new(1, 0.5), row.ZIndex + 1)
-    local txt = label(shell, "[ ... ]", t, 11, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 1, 0), shell.ZIndex + 1, Enum.TextXAlignment.Center, t.sub)
+    local txt = label(shell, "[ ... ]", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 1, 0), shell.ZIndex + 1, Enum.TextXAlignment.Center, t.sub)
     local hit = buttonText(shell, "", t, 11, shell.ZIndex + 2)
     local w = Widget.new(win, id or cleanName(opt.label), "keybind", opt)
     w.row = row
@@ -1112,13 +1144,13 @@ end
 function Widgets.box(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 24)
-    label(row, opt.label or id or "Text", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(1, -118, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    label(row, opt.label or id or "Text", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(1, -118, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
     local shell = makeField(row, t, UDim2.new(0, 110, 1, 0), UDim2.new(1, 0, 0.5, 0), Vector2.new(1, 0.5), row.ZIndex + 1)
     local box = mk("TextBox", {
         Text = opt.default or opt.value or "",
         PlaceholderText = opt.placeholder or "",
         Font = Enum.Font.Gotham,
-        TextSize = 11,
+        TextSize = 12,
         TextColor3 = t.text,
         PlaceholderColor3 = t.dim,
         BackgroundTransparency = 1,
@@ -1169,8 +1201,8 @@ end
 function Widgets.meter(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 30)
-    label(row, opt.label or id or "Meter", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(0.65, 0, 0, 12), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
-    local pct = label(row, "0%", t, 11, UDim2.new(0.65, 0, 0, 0), UDim2.new(0.35, 0, 0, 12), row.ZIndex + 1, Enum.TextXAlignment.Right, t.sub)
+    label(row, opt.label or id or "Meter", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(0.65, 0, 0, 12), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    local pct = label(row, "0%", t, 12, UDim2.new(0.65, 0, 0, 0), UDim2.new(0.35, 0, 0, 12), row.ZIndex + 1, Enum.TextXAlignment.Right, t.sub)
     local track = makeField(row, t, UDim2.new(1, 0, 0, 6), UDim2.new(0, 0, 1, -4), Vector2.new(0, 1), row.ZIndex + 1)
     corner(3, track)
     local fillBar = mk("Frame", {
@@ -1213,12 +1245,12 @@ end
 function Widgets.color(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 24)
-    label(row, opt.label or id or "Color", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(1, -100, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    label(row, opt.label or id or "Color", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(1, -100, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
     local hexShell = makeField(row, t, UDim2.new(0, 60, 1, 0), UDim2.new(1, -32, 0.5, 0), Vector2.new(1, 0.5), row.ZIndex + 1)
     local hexBox = mk("TextBox", {
         Text = "",
         Font = Enum.Font.Code,
-        TextSize = 10,
+        TextSize = 11,
         TextColor3 = t.sub,
         BackgroundTransparency = 1,
         ClearTextOnFocus = false,
@@ -1482,39 +1514,46 @@ function Window:_bindDrag()
     local startPos
     local startMouse
     local dragTw
+    local dragType
     local function clampPos(x, y)
         local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1200, 800)
         x = clamp(x, 4, max(4, vp.X - self.frame.AbsoluteSize.X - 4))
         y = clamp(y, 4, max(4, vp.Y - 24))
         return x, y
     end
+    local function start(input, allow)
+        if not allow then return end
+        dragging = true
+        dragType = input.UserInputType
+        startPos = self.frame.Position
+        startMouse = input.Position
+        self.ui:_front(self)
+        self.ui.router:capture(self, {
+            changed = function(i)
+                if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                    local d = i.Position - startMouse
+                    local x, y = clampPos(startPos.X.Offset + d.X, startPos.Y.Offset + d.Y)
+                    if dragTw then pcall(function() dragTw:Cancel() end) end
+                    dragTw = tween(self.frame, 0.08, { Position = UDim2.fromOffset(x, y) })
+                end
+            end,
+            ended = function(i)
+                if dragging and (i.UserInputType == dragType or (dragType == Enum.UserInputType.Touch and i.UserInputType == Enum.UserInputType.Touch)) then
+                    dragging = false
+                    if dragTw then pcall(function() dragTw:Cancel() end) end
+                    local x, y = clampPos(self.frame.Position.X.Offset, self.frame.Position.Y.Offset)
+                    self.frame.Position = UDim2.fromOffset(x, y)
+                    self.ui:_resolveWindow(self)
+                    self.ui.router:release(self)
+                end
+            end,
+        })
+    end
     self.header.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            startPos = self.frame.Position
-            startMouse = input.Position
-            self.ui:_front(self)
-            self.ui.router:capture(self, {
-                changed = function(i)
-                    if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-                        local d = i.Position - startMouse
-                        local x, y = clampPos(startPos.X.Offset + d.X, startPos.Y.Offset + d.Y)
-                        if dragTw then pcall(function() dragTw:Cancel() end) end
-                        dragTw = tween(self.frame, 0.06, { Position = UDim2.fromOffset(x, y) })
-                    end
-                end,
-                ended = function(i)
-                    if dragging and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
-                        dragging = false
-                        if dragTw then pcall(function() dragTw:Cancel() end) end
-                        local x, y = clampPos(self.frame.Position.X.Offset, self.frame.Position.Y.Offset)
-                        self.frame.Position = UDim2.fromOffset(x, y)
-                        self.ui:_resolveWindow(self)
-                        self.ui.router:release(self)
-                    end
-                end,
-            })
-        end
+        start(input, input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch)
+    end)
+    self.frame.InputBegan:Connect(function(input)
+        start(input, input.UserInputType == Enum.UserInputType.MouseButton3)
     end)
 end
 
@@ -1859,7 +1898,15 @@ function UI:_watermark()
         ZIndex = frame.ZIndex + 1,
     }, frame)
     corner(1, bar)
-    local lbl = label(frame, self.title, t, 11, UDim2.new(0, 12, 0, 0), UDim2.new(0, 0, 1, 0), frame.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    local lbl = label(frame, self.title, t, 12, UDim2.new(0, 12, 0, 0), UDim2.new(0, 0, 1, 0), frame.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    bindFreeDrag(self, frame, frame, function()
+        return frame.Position.X.Offset, frame.Position.Y.Offset
+    end, function(x, y)
+        local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1200, 800)
+        x = clamp(x, 4, max(4, vp.X - frame.AbsoluteSize.X - 4))
+        y = clamp(y, 4, max(4, vp.Y - frame.AbsoluteSize.Y - 4))
+        return tween(frame, 0.08, { Position = UDim2.fromOffset(x, y) })
+    end)
     self._wm = frame
     self._wmBar = bar
     self._wmLabel = lbl
@@ -2152,7 +2199,7 @@ function UI:Window(id, title, opt)
         ZIndex = header.ZIndex + 1,
     }, header)
     corner(1, dot)
-    local titleLbl = label(header, title, self.theme, 11, UDim2.new(0, 16, 0, 0), UDim2.new(1, -44, 1, 0), header.ZIndex + 1, Enum.TextXAlignment.Left, self.theme.text)
+    local titleLbl = label(header, title, self.theme, 12, UDim2.new(0, 16, 0, 0), UDim2.new(1, -44, 1, 0), header.ZIndex + 1, Enum.TextXAlignment.Left, self.theme.text)
     local collapse = mk("TextButton", {
         Text = selfWin.open and "–" or "+",
         Font = Enum.Font.Gotham,
@@ -2297,6 +2344,14 @@ function UI:Overlay(id, opt)
     if opt.Padding ~= false then
         pad(opt.PadT or 6, opt.PadB or 6, opt.PadL or 6, opt.PadR or 6, frame)
     end
+    bindFreeDrag(self, frame, frame, function()
+        return frame.Position.X.Offset, frame.Position.Y.Offset
+    end, function(x, y)
+        local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1200, 800)
+        x = clamp(x, 4, max(4, vp.X - frame.AbsoluteSize.X - 4))
+        y = clamp(y, 4, max(4, vp.Y - frame.AbsoluteSize.Y - 4))
+        return tween(frame, 0.08, { Position = UDim2.fromOffset(x, y) })
+    end)
     local ov = { id = id, frame = frame, ui = self }
     function ov:Show(v) self.frame.Visible = v and true or false end
     function ov:GetFrame() return self.frame end
@@ -2378,7 +2433,7 @@ function UI:Toast(title, text, dur, kind)
     local body = mk("TextLabel", {
         Text = text or "",
         Font = Enum.Font.Gotham,
-        TextSize = 10,
+        TextSize = 11,
         TextColor3 = self.theme.sub,
         BackgroundTransparency = 1,
         TextWrapped = true,
