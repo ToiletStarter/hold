@@ -1,55 +1,54 @@
-# EasyESP UI Bridge
+EasyESP UI Bridge
+Overview
 
-## What it is
-EasyESP_UI_Bridge is the optional helper that makes EasyESP and EasyUi work together faster.
+EasyESP_UI_Bridge is the optional pairing layer between EasyESP and EasyUi.
 
-It does not replace either system.
-It only:
-- mounts `esp.cfg` into the UI store
-- builds a default ESP control layout
-- adds bridge helper state like preset/profile/theme/config name
-- gives you one object that can sync, apply, save, load, and detach
-- prevents duplicate bridge attachments
+It is not required by either one.
 
----
+Its job is simple:
 
-## Basic setup
+    mount esp.cfg into the UI store
+    build a default ESP settings layout
+    keep shared helper values for theme/profile/preset/config name
+    give you one link object for sync, apply, save, load, and detach
 
-```lua
-local UI = require(path.To.EasyUi)
-local ESP = require(path.To.EasyESP)
+If you want both systems to stay separate, do not use the bridge.
+Quick start
+
+Lua
+
+local EasyUi = require(path.To.EasyUi)
+local EasyESP = require(path.To.EasyESP)
 local Bridge = require(path.To.EasyESP_UI_Bridge)
 
-local ui = UI.new({
-    Title = "EasyStack",
+local ui = EasyUi.new({
+    Title = "Example",
     Theme = "pastel",
-    MenuKey = Enum.KeyCode.LeftAlt,
 })
 
-local esp = ESP.new()
+local esp = EasyESP.new()
 esp:on(true)
 esp:start()
 
 local link = Bridge.Attach(ui, esp)
-```
 
----
+What Attach does
 
-## What `Attach` does
+Lua
 
-```lua
 local link = Bridge.Attach(ui, esp, opt)
-```
 
 It:
-- detaches any older bridge first
-- mounts `esp.cfg` into the UI under a prefix
-- builds default bridge windows or a custom schema
-- returns a link object
+
+    detaches any older bridge first
+    mounts esp.cfg into the UI under a prefix
+    builds default bridge windows or a custom schema
+    returns a link object
 
 Returned object:
 
-```lua
+Lua
+
 {
     ui = ui,
     esp = esp,
@@ -63,70 +62,67 @@ Returned object:
     load = function(name) ... end,
     detach = function() ... end,
 }
-```
 
----
+Default behavior
 
-## Default setup
+Default prefix:
 
-The default prefix is `esp`.
-That means bridge widget paths look like:
+Lua
 
-- `esp.box.on`
-- `esp.target.fov`
-- `esp.radar.on`
-- `esp.world.on`
+"esp"
 
-Default bridge helper paths:
+So bridge widget paths look like:
 
-- `bridge.esp`
-- `bridge.theme`
-- `bridge.accent`
-- `bridge.profile`
-- `bridge.pack`
-- `bridge.preset`
-- `bridge.cfgName`
+    esp.box.on
+    esp.target.fov
+    esp.radar.on
+    esp.world.on
 
----
+Bridge helper paths:
 
-## Custom prefix
+    bridge.esp
+    bridge.theme
+    bridge.accent
+    bridge.profile
+    bridge.pack
+    bridge.preset
+    bridge.cfgName
 
-```lua
+Custom prefix
+
+Lua
+
 Bridge.Attach(ui, esp, {
     prefix = "mainesp",
 })
-```
 
 Then paths become:
 
-- `mainesp.box.on`
-- `mainesp.target.fov`
-- `mainesp.radar.on`
+    mainesp.box.on
+    mainesp.target.fov
+    mainesp.radar.on
 
----
-
-## Default windows
+Default windows
 
 The built-in schema creates:
-- Combat
-- Visuals
-- Radar
-- World
-- Config
 
-You can get the raw schema first:
+    Combat
+    Visuals
+    Radar
+    World
+    Config
 
-```lua
+Get the raw schema first:
+
+Lua
+
 local schema = Bridge.Schema("esp")
-```
 
 Then edit it before attaching.
+Custom schema
 
----
+Lua
 
-## Custom schema
-
-```lua
 Bridge.Attach(ui, esp, {
     prefix = "esp",
     schema = {
@@ -141,150 +137,152 @@ Bridge.Attach(ui, esp, {
         },
     }
 })
-```
 
----
+Live theme sync
 
-## Live theme sync
+If you want bridge.theme and bridge.accent changes to apply automatically:
 
-If you want `bridge.theme` and `bridge.accent` changes to apply automatically:
+Lua
 
-```lua
 Bridge.Attach(ui, esp, {
     liveTheme = true,
 })
-```
 
----
+Link methods
+Sync
 
-## Link methods
+Lua
 
-### Sync
-
-```lua
 link:sync()
-```
 
-Refreshes the UI from the mounted ESP config.
+Refreshes bridge-bound widgets from the mounted ESP config.
+Apply theme
 
-### Apply theme
+Lua
 
-```lua
 link:applyTheme()
-```
 
 Reads:
-- `bridge.theme`
-- `bridge.accent`
 
-Then applies the theme to:
-- the UI
-- the ESP
+    bridge.theme
+    bridge.accent
 
-### Apply setup
+Then applies the result to:
 
-```lua
+    EasyUi
+    EasyESP
+
+Apply setup
+
+Lua
+
 link:applySetup()
-```
 
 Reads:
-- `bridge.preset`
-- `bridge.profile`
-- `bridge.pack`
+
+    bridge.preset
+    bridge.profile
+    bridge.pack
 
 Then applies the matching ESP setup.
+Save pair
 
-### Save pair
+Lua
 
-```lua
 link:save("legit")
-```
 
 Saves:
-- `ui:SaveConfig(name)`
-- `esp:save(name)`
 
-If no name is provided, it uses `bridge.cfgName`.
+    ui:SaveConfig(name)
+    esp:save(name)
 
-### Load pair
+If no name is provided, it uses bridge.cfgName.
+Load pair
 
-```lua
+Lua
+
 link:load("legit")
-```
 
 Loads:
-- `ui:LoadConfig(name)`
-- `esp:load(name)`
 
-Then reapplies bridge theme and syncs mounted values.
+    ui:LoadConfig(name)
+    esp:load(name)
 
-### Detach
+Then reapplies bridge theme and syncs again.
+Detach
 
-```lua
+Lua
+
 link:detach()
-```
 
 This destroys bridge-built windows and unmounts the ESP config root from the UI.
+Detach directly
 
----
+Lua
 
-## Detach directly
-
-```lua
 Bridge.Detach(ui)
-```
 
-Use this if you want to remove the bridge later without destroying the UI or ESP themselves.
+Use this if you want to remove the bridge without destroying the UI or ESP themselves.
+Bridge toolkit
 
----
+Lua
 
-## Bridge toolkit
-
-```lua
 local Bridge = require(path.To.EasyESP_UI_Bridge)
 local tk = Bridge.Toolkit
-```
 
-### Helpers
+Helpers
 
-- `tk.Schema(prefix)`
-- `tk.Attach(ui, esp, opt)`
-- `tk.Detach(ui)`
-- `tk.ApplyTheme(link)`
-- `tk.ApplySetup(link)`
-- `tk.Save(link, name)`
-- `tk.Load(link, name)`
-- `tk.Pair(UIMod, ESPMod, uiOpt, espOpt, bridgeOpt)`
+    tk.Schema(prefix)
+    tk.Attach(ui, esp, opt)
+    tk.Detach(ui)
+    tk.ApplyTheme(link)
+    tk.ApplySetup(link)
+    tk.Save(link, name)
+    tk.Load(link, name)
+    tk.Pair(UIMod, ESPMod, uiOpt, espOpt, bridgeOpt)
 
-### Quick pair helper
+Quick pair helper
 
-```lua
-local UI = require(path.To.EasyUi)
-local ESP = require(path.To.EasyESP)
+Lua
+
+local EasyUi = require(path.To.EasyUi)
+local EasyESP = require(path.To.EasyESP)
 local Bridge = require(path.To.EasyESP_UI_Bridge)
 
-local ui, esp, link = Bridge.Toolkit.Pair(UI, ESP,
+local ui, esp, link = Bridge.Toolkit.Pair(EasyUi, EasyESP,
     { Title = "Stack", Theme = "pastel" },
     { on = true },
     { prefix = "esp" }
 )
-```
 
-By default `Pair`:
-- creates the UI
-- creates the ESP
-- enables the ESP unless `espOpt.on == false`
-- starts the ESP unless `bridgeOpt.start == false`
-- attaches the bridge
+By default Pair:
 
----
+    creates the UI
+    creates the ESP
+    enables the ESP unless espOpt.on == false
+    starts the ESP unless bridgeOpt.start == false
+    attaches the bridge
 
-## Why use the bridge
+Setup check
 
-Use the bridge if you want:
-- the fastest paired setup
-- a default ESP settings UI
-- synced theme/profile/preset controls
-- pair save/load buttons without writing the glue yourself
+The bridge is streamlined because it removes repetitive glue, not because it hides everything.
+Good use case
 
-Do not use it if you want the systems to stay completely separate.
+Use it when you want:
+
+    a ready-made ESP control UI
+    synced theme/profile/preset controls
+    pair save/load
+    fast startup for both systems together
+
+Skip it when you want
+
+    EasyESP by itself
+    EasyUi by itself
+    a fully custom pairing layer
+
+That keeps the stack simple:
+
+    EasyUi stays standalone
+    EasyESP stays standalone
+    the bridge only handles pairing
