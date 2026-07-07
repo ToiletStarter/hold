@@ -1,61 +1,59 @@
-# EasyESP
+EasyESP
+Overview
 
-## What it is
-EasyESP is a standalone Drawing-based ESP system for Roblox executors.
+EasyESP is a standalone Drawing-based ESP system built primarily around Potassium’s Drawing API.
 
-It does not require the UI or bridge.
+It does not require EasyUi or the bridge.
 
 Main features:
-- player ESP
-- offscreen arrows
-- radar
-- target selector
-- player list
-- chams
-- world overrides
-- ring overlays
-- custom entities
-- hooks/modules
-- JSON config export/import
-- toolkit helpers
-- singleton protection so a new instance kills the old one
 
----
+    player ESP
+    offscreen arrows
+    radar
+    target selector
+    player list
+    rings
+    custom entities
+    hooks/modules
+    chams
+    world overrides
+    JSON config save/load
+    toolkit helpers
+    singleton protection so a new ESP replaces the old one
 
-## Basic setup
+Quick start
 
-```lua
-local ESP = require(path.To.EasyESP)
+Lua
 
-local esp = ESP.new()
+local EasyESP = require(path.To.EasyESP)
+
+local esp = EasyESP.new()
 esp:on(true)
 esp:start()
-```
 
 Stop:
 
-```lua
+Lua
+
 esp:stop()
-```
 
 Destroy:
 
-```lua
+Lua
+
 esp:destroy()
-```
 
----
+Constructor
 
-## Constructor
+Lua
 
-```lua
-local esp = ESP.new(options)
-```
+local esp = EasyESP.new(options)
 
 Example:
 
-```lua
-local esp = ESP.new({
+Lua
+
+local esp = EasyESP.new({
     on = true,
     team = true,
     vis = {
@@ -72,13 +70,11 @@ local esp = ESP.new({
         showFov = true,
     },
 })
-```
 
----
+Core control
 
-## Core control
+Lua
 
-```lua
 esp:on(true)
 esp:setEnabled(true)
 esp:toggle()
@@ -86,84 +82,84 @@ esp:toggle()
 esp:start()
 esp:stop()
 esp:destroy()
-```
 
----
+Destroy all live ESP instances:
 
-## Themes / profiles / packs / presets
+Lua
 
-### Theme
+EasyESP.DestroyAll()
 
-```lua
+Themes / profiles / packs / presets
+Theme
+
+Lua
+
 esp:theme("pastel")
 esp:applyTheme("carbon")
 print(table.concat(esp:themes(), ", "))
-```
 
-### Performance profile
+Performance profile
 
-```lua
+Lua
+
 esp:profile("balanced")
 esp:applyPerformance("high")
 print(table.concat(esp:performanceProfiles(), ", "))
-```
 
-### Feature pack
+Feature pack
 
-```lua
+Lua
+
 esp:pack("comp")
 esp:applyFeaturePack("world")
 print(table.concat(esp:featurePacks(), ", "))
-```
 
-### Preset
+Preset
 
-```lua
+Lua
+
 esp:preset("legit")
 esp:applyPreset("full")
 print(table.concat(esp:presets(), ", "))
-```
 
----
+Config layout
 
-## Config table
+Everything lives in esp.cfg.
+Main fields
 
-Everything lives in `esp.cfg`.
+Lua
 
-### Common fields
-
-```lua
 esp.cfg.on = true
 esp.cfg.maxRange = 3000
 esp.cfg.espRange = 3000
 esp.cfg.team = true
 esp.cfg.rainbow = false
 esp.cfg.rainbowRate = 1
-```
 
-### Visibility
+Visibility
 
-```lua
+Lua
+
 esp.cfg.vis.check = true
 esp.cfg.vis.hide = false
 esp.cfg.vis.tint = true
 esp.cfg.vis.points = 3
-```
 
-### Box
+Box
 
-```lua
+Lua
+
 esp.cfg.box.on = true
 esp.cfg.box.kind = "corner" -- corner / box / 3d / 3dcorner
 esp.cfg.box.mode = "hp"     -- static / team / hp / dist
 esp.cfg.box.w = 1
 esp.cfg.box.fill = false
 esp.cfg.box.col = Color3.fromRGB(192, 154, 255)
-```
 
-### Labels and extras
+Name / HP / distance / tracer
 
-```lua
+Lua
+
 esp.cfg.name.on = true
 esp.cfg.hp.on = true
 esp.cfg.dist.on = true
@@ -172,65 +168,73 @@ esp.cfg.bones.on = false
 esp.cfg.head.on = false
 esp.cfg.gaze.on = false
 esp.cfg.tracer.on = false
-```
 
-### Arrow
+Arrow
 
-```lua
+Lua
+
 esp.cfg.arrow.on = true
 esp.cfg.arrow.rad = 190
 esp.cfg.arrow.size = 14
 esp.cfg.arrow.fill = true
 esp.cfg.arrow.outline = true
 esp.cfg.arrow.dist = true
-```
 
-### Radar
+Radar
 
-```lua
+Lua
+
 esp.cfg.radar.on = true
 esp.cfg.radar.x = 18
 esp.cfg.radar.y = 170
 esp.cfg.radar.r = 74
 esp.cfg.radar.range = 500
 esp.cfg.radar.rot = true
-```
 
-### Target
+Target
 
-```lua
+Lua
+
 esp.cfg.target.on = true
 esp.cfg.target.fov = 240
 esp.cfg.target.showFov = true
 esp.cfg.target.visOnly = false
 esp.cfg.target.brackets = true
 esp.cfg.target.line = false
-```
 
-### World
+List
 
-```lua
+Lua
+
+esp.cfg.list.on = true
+esp.cfg.list.x = 18
+esp.cfg.list.y = 350
+esp.cfg.list.w = 220
+esp.cfg.list.max = 10
+
+World
+
+Lua
+
 esp.cfg.world.on = true
 esp.cfg.world.full = true
 esp.cfg.world.noFog = true
 esp.cfg.world.fov = 80
 esp.cfg.world.bright = 2
-```
 
-### Self visuals
+Self visuals
 
-```lua
+Lua
+
 esp.cfg.self.wm.on = true
 esp.cfg.self.compass.on = true
 esp.cfg.self.fov.on = true
 esp.cfg.self.cross.on = true
-```
 
----
+Friends
 
-## Friends
+Lua
 
-```lua
 esp:friend(player)
 esp:markFriend(player)
 esp:unfriend(player)
@@ -238,15 +242,12 @@ esp:unmarkFriend(player)
 esp:clearFriends()
 
 print(esp:isFriend(player))
-```
 
----
+Rings
+Enemy ring specs
 
-## Rings
+Lua
 
-### Enemy ring specs
-
-```lua
 esp.cfg.rings.on = true
 esp.cfg.rings.enemies = true
 
@@ -258,11 +259,11 @@ esp:addRingSpec({
     pulse = true,
     ticks = 8,
 })
-```
 
-### World / attached ring
+World / attached ring
 
-```lua
+Lua
+
 esp:addRing("drop", {
     at = workspace.Drop,
     rad = 10,
@@ -273,15 +274,12 @@ esp:addRing("drop", {
 
 esp:dropRing("drop")
 esp:clearRings()
-```
 
----
+Entities
+Custom entity
 
-## Entities
+Lua
 
-### Custom entity
-
-```lua
 esp:addEnt("generator", {
     get = function()
         return workspace:FindFirstChild("Generator")
@@ -295,45 +293,43 @@ esp:addEnt("generator", {
     dot = true,
     max = 1200,
 })
-```
 
 Alias:
 
-```lua
+Lua
+
 esp:addEntity("generator", spec)
-```
 
-### Direct instance entity
+Direct instance entity
 
-```lua
+Lua
+
 esp:addInst("loot_1", workspace.LootCrate, {
     label = "Loot",
     col = Color3.fromRGB(120, 255, 190),
     dot = true,
     dist = true,
 })
-```
 
 Alias:
 
-```lua
+Lua
+
 esp:addInstanceEntity("loot_1", workspace.LootCrate, opt)
-```
 
-### Remove / clear
+Remove / clear
 
-```lua
+Lua
+
 esp:dropEnt("generator")
 esp:removeEntity("generator")
 esp:clearEnts()
 esp:clearEntities("loot_")
-```
 
----
+Scanners
 
-## Scanners
+Lua
 
-```lua
 esp:scan(workspace, {
     prefix = "pickup_",
     limit = 80,
@@ -352,15 +348,12 @@ esp:scanTools({
 esp:scanPickups({
     names = { "ammo", "cash", "armor", "med" },
 })
-```
 
----
+Hooks and modules
+Hook
 
-## Hooks and modules
+Lua
 
-### Hook
-
-```lua
 esp:hook("center_dot", function(self, s)
     local x = s.bx + s.bw * 0.5
     local y = s.by + s.bh * 0.5
@@ -368,134 +361,153 @@ esp:hook("center_dot", function(self, s)
 end)
 
 esp:unhook("center_dot")
-```
 
 Aliases:
 
-```lua
+Lua
+
 esp:onDraw("center_dot", fn)
 esp:removeDraw("center_dot")
-```
 
-### Module
+Module
 
-```lua
+Lua
+
 esp:mod({
     name = "tag_demo",
     on = true,
-    player = function(state, esp, s)
-        esp.pool:txt("md" .. s.uid, "DEMO", s.bx + s.bw * 0.5, s.by - 28, 10, esp.cfg.box.col, true)
+    player = function(state, esp0, s)
+        esp0.pool:txt("md" .. s.uid, "DEMO", s.bx + s.bw * 0.5, s.by - 28, 10, esp0.cfg.box.col, true)
     end,
 })
 
 esp:module("tag_demo")
 esp:toggleMod("tag_demo", false)
 esp:dropMod("tag_demo")
-```
 
 Aliases:
 
-```lua
+Lua
+
 esp:register(spec)
 esp:toggleModule(name, on)
 esp:unregister(name)
-```
 
----
+Utility methods
 
-## Utility methods
+Lua
 
-```lua
 local plr = esp:nearest(500, false)
 local pos = esp:center(player)
 local x, y, depth, onScreen = esp:project(workspace.Part.Position)
 local vis = esp:sees(player.Character)
 local stats = esp:getStats()
-```
 
----
+Binds
 
-## Binds
+Lua
 
-```lua
 esp:bind(Enum.KeyCode.F4, function(self)
     self:toggle()
 end)
 
 esp:clearBinds()
-```
 
----
+Config export / import
+JSON
 
-## Config export / import
+Lua
 
-### JSON
-
-```lua
 local json = esp:export()
 esp:import(json)
-```
 
-### File save / load
+File save / load
 
-```lua
+Lua
+
 esp:save("legit")
 esp:load("legit")
 print(table.concat(esp:configs(), ", "))
-```
 
----
+Dragging ESP HUD pieces
 
-## Toolkit
+Middle click drag is supported for:
 
-```lua
-local Toolkit = ESP.Toolkit
-```
+    radar
+    player list
+    ESP watermark
 
-### Helpers
+That makes it easier to place the main on-screen ESP panels without needing the UI bridge.
+Toolkit
 
-- `Toolkit.clone(tbl)`
-- `Toolkit.merge(a, b)`
-- `Toolkit.fill(a, b)`
-- `Toolkit.color(r, g, b)`
-- `Toolkit.hsv(h, s, v)`
-- `Toolkit.ring(spec)`
-- `Toolkit.flag(text, color)`
-- `Toolkit.pathGet(tbl, path)`
-- `Toolkit.pathSet(tbl, path, value)`
-- `Toolkit.pathToggle(tbl, path)`
-- `Toolkit.findPlayer(query)`
-- `Toolkit.scan(root, predicate, limit)`
-- `Toolkit.applyTheme(esp, name)`
-- `Toolkit.applyProfile(esp, name)`
-- `Toolkit.applyPack(esp, name)`
-- `Toolkit.applyPreset(esp, name)`
-- `Toolkit.quick(opt)` / `Toolkit.quickESP(opt)`
+Lua
 
-### Example
+local Toolkit = EasyESP.Toolkit
 
-```lua
-local ESP = require(path.To.EasyESP)
-local tk = ESP.Toolkit
+Helpers
+
+    Toolkit.clone(tbl)
+    Toolkit.merge(a, b)
+    Toolkit.fill(a, b)
+    Toolkit.color(r, g, b)
+    Toolkit.hsv(h, s, v)
+    Toolkit.ring(spec)
+    Toolkit.flag(text, color)
+    Toolkit.pathGet(tbl, path)
+    Toolkit.pathSet(tbl, path, value)
+    Toolkit.pathToggle(tbl, path)
+    Toolkit.findPlayer(query)
+    Toolkit.scan(root, predicate, limit)
+    Toolkit.applyTheme(esp, name)
+    Toolkit.applyProfile(esp, name)
+    Toolkit.applyPack(esp, name)
+    Toolkit.applyPreset(esp, name)
+    Toolkit.quick(opt) / Toolkit.quickESP(opt)
+
+Example
+
+Lua
+
+local EasyESP = require(path.To.EasyESP)
+local tk = EasyESP.Toolkit
 
 local esp = tk.quickESP({
     preset = "legit",
     on = true,
 })
-```
 
----
+Setup philosophy
 
-## Potassium notes
+EasyESP is streamlined around three ideas:
+1. Short startup
 
-EasyESP is already shaped around Potassium’s Drawing stack:
-- it uses `Drawing.new`, `setrenderproperty`, and `cleardrawcache`
-- it spreads visibility, box, and tool refresh work across frames
-- it keeps a pooled drawing cache instead of rebuilding objects every frame
+You can get running with:
 
-If you want the fastest stable setup on Potassium, use:
-- `esp:profile("low")` for weak games or heavy servers
-- `esp:profile("balanced")` as default
-- `esp:profile("high")` only if FPS is already good
+    new()
+    on(true)
+    start()
 
-The module also seeds its internal FPS average from `getfpscap()` when Potassium exposes it, which helps the first few scheduling decisions line up with the client cap.
+2. Predictable config groups
+
+Settings are grouped by:
+
+    vis
+    box
+    target
+    radar
+    list
+    self
+    world
+    chams
+
+3. Extend only when needed
+
+Use:
+
+    hooks
+    modules
+    custom entities
+    rings
+    toolkit helpers
+
+That keeps the base setup simple while still leaving room for game-specific behavior.
