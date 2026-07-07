@@ -371,6 +371,13 @@ function Router.new(ui)
             return
         end
 
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local win = ui:_windowAt(input.Position)
+            if win then
+                ui:_front(win)
+            end
+        end
+
         if ui._popup and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
             local pos = input.Position
             local p = ui._popup
@@ -1463,12 +1470,18 @@ function Window:_refresh()
     self.body.CanvasSize = UDim2.new(0, 0, 0, full)
     self.collapse.Text = "–"
     self.collapse.TextColor3 = self.ui.theme.accent
+    task.defer(function()
+        if self.ui and self.frame and self.frame.Parent then
+            self.ui:_resolveWindow(self)
+        end
+    end)
 end
 
 function Window:_bindDrag()
     local dragging = false
     local startPos
     local startMouse
+    local dragTw
     local function clampPos(x, y)
         local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1200, 800)
         x = clamp(x, 4, max(4, vp.X - self.frame.AbsoluteSize.X - 4))
@@ -1486,14 +1499,17 @@ function Window:_bindDrag()
                     if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                         local d = i.Position - startMouse
                         local x, y = clampPos(startPos.X.Offset + d.X, startPos.Y.Offset + d.Y)
-                        self.frame.Position = UDim2.fromOffset(x, y)
+                        if dragTw then pcall(function() dragTw:Cancel() end) end
+                        dragTw = tween(self.frame, 0.06, { Position = UDim2.fromOffset(x, y) })
                     end
                 end,
                 ended = function(i)
                     if dragging and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
                         dragging = false
+                        if dragTw then pcall(function() dragTw:Cancel() end) end
                         local x, y = clampPos(self.frame.Position.X.Offset, self.frame.Position.Y.Offset)
                         self.frame.Position = UDim2.fromOffset(x, y)
+                        self.ui:_resolveWindow(self)
                         self.ui.router:release(self)
                     end
                 end,
@@ -1725,6 +1741,7 @@ function UI.new(opt)
     local self = setmetatable({}, UI)
     self.id = opt.Id or ("EasyUI4_" .. tostring(floor(os.clock() * 1000000)))
     self.title = opt.Title or "EasyUI"
+    self.showWatermark = opt.Watermark == true
     self.sig = opt.Signature or self.title
     self.themeName = opt.Theme or "pastel"
     self.theme = themeOf(self.themeName, opt.ThemeOverride, opt.Accent)
@@ -1828,7 +1845,7 @@ function UI:_watermark()
         Position = UDim2.new(0, 10, 0, 10),
         BackgroundColor3 = t.bg1,
         BorderSizePixel = 0,
-        Visible = true,
+        Visible = self.showWatermark,
         ZIndex = 3200,
     }, self.hudRoot)
     corner(6, frame)
@@ -1898,6 +1915,9 @@ function UI:_closePopup()
 end
 
 function UI:_front(win)
+    if not win or not win.frame or not win.frame.Parent then
+        return
+    end
     self._top = self._top + 40
     local frame = win.frame
     local old = frame.ZIndex
@@ -1908,6 +1928,88 @@ function UI:_front(win)
         if d:IsA("GuiObject") then
             d.ZIndex = d.ZIndex + delta
         end
+    end
+end
+
+function UI:_rect(win)
+    if not win or not win.frame then
+        return nil
+    end
+    local p = win.frame.Position
+    local s = win.frame.Size
+    return p.X.Offset, p.Y.Offset, s.X.Offset, s.Y.Offset
+end
+
+function UI:_overlap(a, b)
+    local ax, ay, aw, ah = self:_rect(a)
+    local bx, by, bw, bh = self:_rect(b)
+    if not ax or not bx then
+        return false
+    end
+    return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
+end
+
+function UI:_windowAt(pos)
+    local best, z = nil, -math.huge
+    for i = 1, #self.windows do
+        local w = self.windows[i]
+        if w and w.frame and w.frame.Visible then
+            local x, y, ww, hh = self:_rect(w)
+            if x and pos.X >= x and pos.X <= x + ww and pos.Y >= y and pos.Y <= y + hh then
+                if w.frame.ZIndex > z then
+                    best = w
+                    z = w.frame.ZIndex
+                end
+            end
+        end
+    end
+    return best
+end
+
+function UI:_resolveWindow(win)
+    if not win or not win.frame then
+        return
+    end
+    local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1200, 800)
+    local x, y, w, h = self:_rect(win)
+    x = clamp(x, 4, max(4, vp.X - w - 4))
+    y = clamp(y, 4, max(4, vp.Y - h - 4))
+    win.frame.Position = UDim2.fromOffset(x, y)
+
+    local moved = true
+    local passes = 0
+    while moved and passes < 24 do
+        moved = false
+        passes = passes + 1
+        for i = 1, #self.windows do
+            local other = self.windows[i]
+            if other and other ~= win and other.frame and other.frame.Visible and self:_overlap(win, other) then
+                local ox, oy, ow, oh = self:_rect(other)
+                local nx = ox + ow + 12
+                local ny = y
+                if nx + w > vp.X - 4 then
+                    nx = 16
+                    ny = oy + oh + 12
+                end
+                if ny + h > vp.Y - 4 then
+                    ny = 54
+                end
+                x = clamp(nx, 4, max(4, vp.X - w - 4))
+                y = clamp(ny, 4, max(4, vp.Y - h - 4))
+                win.frame.Position = UDim2.fromOffset(x, y)
+                moved = true
+                break
+            end
+        end
+    end
+end
+
+function UI:_resolveAll()
+    sort(self.windows, function(a, b)
+        return (a.frame and a.frame.ZIndex or 0) < (b.frame and b.frame.ZIndex or 0)
+    end)
+    for i = 1, #self.windows do
+        self:_resolveWindow(self.windows[i])
     end
 end
 
@@ -2112,6 +2214,7 @@ function UI:Window(id, title, opt)
 
     self.windows[#self.windows + 1] = selfWin
     self.windowById[id] = selfWin
+    self:_resolveWindow(selfWin)
     return selfWin
 end
 
@@ -2165,6 +2268,7 @@ function UI:Build(spec)
         end
         out[#out + 1] = win
     end
+    self:_resolveAll()
     return out
 end
 
@@ -2451,6 +2555,7 @@ function UI:ImportConfig(str)
     end
     self:ApplyTheme()
     self:Sync()
+    self:_resolveAll()
     return true
 end
 
