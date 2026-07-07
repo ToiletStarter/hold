@@ -1075,6 +1075,8 @@ function ESP.new(opt)
     self._fa = 0
     self._fc = 0
     self._buf = {}
+    self._dragRects = {}
+    self._drag = nil
     self._proj = function(pos)
         if not cam then
             return 0, 0, -1, false
@@ -1085,10 +1087,72 @@ function ESP.new(opt)
 
     self:_boot()
     self:_flags()
+    self:_dragHooks()
 
     Runtime.esp = self
     active[#active + 1] = self
     return self
+end
+
+function ESP:_dragHit(pos)
+    local best, top = nil, -math.huge
+    for kind, r in pairs(self._dragRects) do
+        if r and pos.X >= r.x and pos.X <= r.x + r.w and pos.Y >= r.y and pos.Y <= r.y + r.h then
+            local z = r.z or 0
+            if z >= top then
+                best = { kind = kind, rect = r }
+                top = z
+            end
+        end
+    end
+    return best
+end
+
+function ESP:_dragHooks()
+    insert(self.con, Input.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton3 then return end
+        local hit = self:_dragHit(input.Position)
+        if not hit then return end
+        local r = hit.rect
+        self._drag = {
+            kind = hit.kind,
+            offX = input.Position.X - r.x,
+            offY = input.Position.Y - r.y,
+        }
+    end))
+
+    insert(self.con, Input.InputChanged:Connect(function(input)
+        local d = self._drag
+        if not d then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+        local vp = cam and cam.ViewportSize or v2(1200, 800)
+        if d.kind == "radar" then
+            local r = self.cfg.radar.r
+            self.cfg.radar.x = clamp(floor(input.Position.X - d.offX + 0.5), 0, max(0, vp.X - r * 2))
+            self.cfg.radar.y = clamp(floor(input.Position.Y - d.offY + 0.5), 0, max(0, vp.Y - r * 2))
+        elseif d.kind == "list" then
+            local w = self.cfg.list.w
+            local h = (self.cfg.list.title and 18 or 0) + self.cfg.list.row * self.cfg.list.max + 8
+            self.cfg.list.x = clamp(floor(input.Position.X - d.offX + 0.5), 0, max(0, vp.X - w))
+            self.cfg.list.y = clamp(floor(input.Position.Y - d.offY + 0.5), 0, max(0, vp.Y - h))
+        elseif d.kind == "wm" then
+            local txt = "EasyESP " .. ESP.ver
+            if self.cfg.self.wm.stats then
+                txt = txt .. " | FPS " .. tostring(self.stats.fps) .. " | Drawn " .. tostring(self.stats.drawn) .. " | Pool " .. tostring(self.pool.size)
+            end
+            local w = fontSizeWidth(txt, self.cfg.self.wm.size) + 10
+            local h = self.cfg.self.wm.size + 8
+            self.cfg.self.wm.x = clamp(floor(input.Position.X - d.offX + 0.5), 0, max(0, vp.X - w))
+            self.cfg.self.wm.y = clamp(floor(input.Position.Y - d.offY + 0.5), 0, max(0, vp.Y - h))
+        end
+    end))
+
+    insert(self.con, Input.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton3 then
+            self._drag = nil
+        end
+    end))
 end
 
 function ESP:_boot()
@@ -1568,7 +1632,7 @@ end
 function ESP:_boxDraw(s, c, a)
     local b = self.cfg.box
     local x, y, w, h = s.bx, s.by, s.bw, s.bh
-    if not x then
+    if not b.on or not x then
         return
     end
     if b.kind == "3d" or b.kind == "3dcorner" then
@@ -1822,6 +1886,7 @@ function ESP:_arrow(s)
 end
 
 function ESP:_radar()
+    self._dragRects.radar = nil
     local cfg = self.cfg.radar
     if not cfg.on or not cam then
         return
@@ -1832,6 +1897,7 @@ function ESP:_radar()
         return
     end
     local cx, cy, r = cfg.x + cfg.r, cfg.y + cfg.r, cfg.r
+    self._dragRects.radar = { x = cfg.x, y = cfg.y, w = r * 2, h = r * 2, z = 150 }
     if cfg.bg then
         self.pool:dot("rad_bg", cx, cy, r, BLACK, true, cfg.a, 48)
     end
@@ -1984,12 +2050,14 @@ function ESP:_threat()
 end
 
 function ESP:_list()
+    self._dragRects.list = nil
     local cfg = self.cfg.list
     if not cfg.on then
         return
     end
     local titleH = cfg.title and 18 or 0
     local h = titleH + cfg.row * cfg.max + 8
+    self._dragRects.list = { x = cfg.x, y = cfg.y, w = cfg.w, h = h, z = 140 }
     if cfg.bg then
         self.pool:box("lst_bg", cfg.x, cfg.y, cfg.w, h, BLACK, true, 1, cfg.a, 60)
         self.pool:box("lst_bd", cfg.x, cfg.y, cfg.w, h, cfg.enemy, false, 1, 0.65, 61)
@@ -2034,6 +2102,7 @@ function ESP:_list()
 end
 
 function ESP:_self()
+    self._dragRects.wm = nil
     if not cam then
         return
     end
@@ -2076,6 +2145,7 @@ function ESP:_self()
             txt = txt .. " | FPS " .. tostring(self.stats.fps) .. " | Drawn " .. tostring(self.stats.drawn) .. " | Pool " .. tostring(self.pool.size)
         end
         local w = fontSizeWidth(txt, s.wm.size) + 10
+        self._dragRects.wm = { x = s.wm.x - 4, y = s.wm.y - 3, w = w, h = s.wm.size + 8, z = 160 }
         if s.wm.bg then
             self.pool:box("wm_bg", s.wm.x - 4, s.wm.y - 3, w, s.wm.size + 8, BLACK, true, 1, s.wm.a)
             self.pool:box("wm_ac", s.wm.x - 4, s.wm.y - 3, 2, s.wm.size + 8, s.wm.accent, true, 1, 1)
