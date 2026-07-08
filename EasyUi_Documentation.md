@@ -1,12 +1,15 @@
 EasyUi
-Overview
+What it is
 
-EasyUi is a standalone Roblox UI system built around small draggable windows, a path-based store, and optional overlays.
+EasyUi is a standalone Roblox UI framework built around:
 
-It is meant to be easy to use in two ways:
-
-    quick manual setup with a few windows and widgets
-    larger schema-driven setups with mounted config tables
+    draggable windows
+    tabs and subtabs inside windows
+    a path-based state store
+    overlays/HUD pieces
+    schema and descriptor-based building
+    config save/load
+    extension through plugins, custom widgets, and a toolkit
 
 It does not require EasyESP.
 
@@ -15,10 +18,6 @@ Default menu key:
 Lua
 
 Enum.KeyCode.LeftAlt
-
-Default watermark state:
-
-    off
 
 Quick start
 
@@ -33,15 +32,17 @@ local ui = EasyUi.new({
     Signature = "MyMenu",
 })
 
-local combat = ui:Window("combat", "Combat", { Width = 260 })
+local win = ui:Window("combat", "Combat", { Width = 300 })
+local target = win:Tab("target", "Target")
+local selector = target:SubTab("selector", "Selector")
 
-combat:Toggle("aim_on", {
+selector:Toggle("aim_on", {
     label = "Aimbot",
     path = "combat.aimbot.on",
     default = false,
 })
 
-combat:Slider("fov", {
+selector:Slider("fov", {
     label = "FOV",
     path = "combat.aimbot.fov",
     min = 20,
@@ -50,13 +51,7 @@ combat:Slider("fov", {
     default = 120,
 })
 
-combat:Button("save", "Save Config", {
-    onPress = function()
-        ui:SaveConfig("default")
-    end,
-})
-
-Constructor
+Creating the UI
 
 Lua
 
@@ -70,7 +65,7 @@ local ui = EasyUi.new({
     Title = "My Menu",
     Theme = "pastel",
     ThemeOverride = nil,
-    Accent = Color3.fromRGB(192, 154, 255),
+    Accent = Color3.fromRGB(202, 164, 255),
     MenuKey = Enum.KeyCode.LeftAlt,
     Visible = true,
     Signature = "MyMenu",
@@ -86,6 +81,7 @@ Notes
     creating a new EasyUi instance destroys the previous active EasyUi instance
     gethui() is used when available
     the UI creates its own internal container for safe extension content
+    watermark is off by default
 
 Core control
 
@@ -122,7 +118,7 @@ EasyUi.AddTheme("mytheme", palette)
 
 Store and mounting
 
-The UI uses a path-based store. That is the main reason it stays manageable when the setup gets bigger.
+EasyUi uses a path-based store. This is the core of how widgets stay organized.
 Direct get/set
 
 Lua
@@ -174,7 +170,7 @@ Create a window
 Lua
 
 local win = ui:Window("combat", "Combat", {
-    Width = 260,
+    Width = 300,
     X = 18,
     Y = 72,
     Open = true,
@@ -199,7 +195,7 @@ win:Close()
 win:ToggleOpen()
 win:Destroy()
 
-Window lookups
+Window lookup
 
 Lua
 
@@ -210,54 +206,73 @@ Dragging behavior
 
     left click and drag the header to move a window
     middle click and drag anywhere on the window to move it
-    middle click and drag overlays too
-    the last interacted window comes to the front
-    overlapping windows are auto-resolved on build/import/resize
+    last interacted window comes to the front
+    overlapping windows auto-resolve on build/import/resize
 
+Tabs and subtabs
+
+This is the main anti-cramping layer in the current UI.
+Create tabs
+
+Lua
+
+local target = win:Tab("target", "Target")
+local prediction = win:Tab("prediction", "Prediction")
+
+Create subtabs
+
+Lua
+
+local selector = target:SubTab("selector", "Selector")
+local checks = target:SubTab("checks", "Checks")
+
+Lookup helpers
+
+Lua
+
+win:GetTab("target")
+target:GetSubTab("selector")
+
+Why use them
+
+Tabs and subtabs let one window carry more settings without turning into one giant flat scroll stack.
 Widgets
+
+All widget add methods work on:
+
+    Window
+    Tab
+    SubTab
+
 Section
 
 Lua
 
-win:Section("Aim")
-win:AddSeparator("Aim")
+selector:Section("Main")
+selector:AddSeparator("Main")
 
 Label
 
 Lua
 
-local lbl = win:Label("status", "Ready")
+local lbl = selector:Label("status", "Ready")
 lbl:set("Running")
-
-Old helper:
-
-Lua
-
-win:AddLabel("Ready")
 
 Button
 
 Lua
 
-win:Button("save_btn", "Save", {
+selector:Button("save_btn", "Save", {
     onPress = function()
         print("save")
     end,
 })
 
-Old helper:
-
-Lua
-
-win:AddButton("Save", function()
-    print("save")
-end)
-
 Toggle
 
 Lua
 
-win:Toggle("aim_on", {
+selector:Toggle("aim_on", {
     label = "Aimbot",
     path = "combat.aimbot.on",
     default = false,
@@ -266,19 +281,11 @@ win:Toggle("aim_on", {
     end,
 })
 
-Old helper:
-
-Lua
-
-win:AddToggle("Aimbot", false, function(v)
-    print(v)
-end)
-
 Slider
 
 Lua
 
-win:Slider("fov", {
+selector:Slider("fov", {
     label = "FOV",
     path = "combat.aimbot.fov",
     min = 20,
@@ -287,19 +294,11 @@ win:Slider("fov", {
     default = 120,
 })
 
-Old helper:
-
-Lua
-
-win:AddSlider("FOV", 20, 400, 120, 1, function(v)
-    print(v)
-end)
-
 Dropdown
 
 Lua
 
-win:Dropdown("part", {
+selector:Dropdown("part", {
     label = "Hit Part",
     path = "combat.aimbot.part",
     items = { "Head", "Torso", "Root" },
@@ -310,7 +309,7 @@ Mode switch
 
 Lua
 
-win:Mode("mode", {
+selector:Mode("mode", {
     label = "Mode",
     path = "combat.mode",
     items = { "Legit", "Rage", "Silent" },
@@ -321,7 +320,7 @@ Keybind
 
 Lua
 
-win:Keybind("key", {
+selector:Keybind("key", {
     label = "Hotkey",
     path = "combat.key",
     default = Enum.KeyCode.Q,
@@ -334,7 +333,7 @@ Text box
 
 Lua
 
-win:Box("name", {
+selector:Box("name", {
     label = "Config Name",
     path = "config.name",
     default = "default",
@@ -348,85 +347,58 @@ Color picker
 
 Lua
 
-win:Color("accent", {
+selector:Color("accent", {
     label = "Accent",
     path = "ui.accent",
-    default = Color3.fromRGB(192, 154, 255),
+    default = Color3.fromRGB(202, 164, 255),
 })
 
 Meter / progress
 
 Lua
 
-win:Meter("load", {
+selector:Meter("load", {
     label = "Load",
     path = "stats.load",
     default = 0.25,
 })
 
-Custom widgets
-Direct custom widget
+Binds on controls
+
+You can right click many controls to set a bind for them.
+
+Supported in a practical way on:
+
+    buttons
+    toggles
+    sliders
+    dropdowns
+    mode selectors
+
+General behavior:
+
+    right click the control
+    press a key
+    press Escape to clear
+    pressing the bound key triggers that control’s activate() behavior
+
+Examples:
+
+    toggle flips
+    button fires
+    slider steps forward
+    dropdown cycles
+    mode cycles
+
+You can also define a bind up front:
 
 Lua
 
-win:Custom("custom_widget", function(win0, id, opt)
-    local tk = win0.ui.Toolkit
-    local row = tk.Create("Frame", {
-        Size = UDim2.new(1, 0, 0, 24),
-        BackgroundTransparency = 1,
-    }, win0.body)
-
-    local lbl = tk.Create("TextLabel", {
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Text = "Custom",
-        Font = Enum.Font.Gotham,
-        TextSize = 12,
-        TextColor3 = win0.ui:GetTheme().text,
-    }, row)
-
-    return {
-        id = id,
-        kind = "custom",
-        row = row,
-        value = "Custom",
-        get = function(self) return self.value end,
-        set = function(self, v) self.value = v; lbl.Text = tostring(v) end,
-        applyTheme = function(self) lbl.TextColor3 = win0.ui:GetTheme().text end,
-        destroy = function(self) row:Destroy() end,
-    }
-end)
-
-Compatibility-style AddCustom
-
-Lua
-
-win:AddCustom(function(win0, ctx)
-    local row = ctx.mk("Frame", {
-        Size = UDim2.new(1, 0, 0, 22),
-        BackgroundTransparency = 1,
-    }, ctx.body)
-
-    local lbl = ctx.mk("TextLabel", {
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Text = "Custom",
-        Font = Enum.Font.Gotham,
-        TextSize = 12,
-        TextColor3 = ctx.theme.text,
-    }, row)
-
-    return {
-        id = "custom_label",
-        kind = "custom",
-        row = row,
-        value = "Custom",
-        get = function(self) return self.value end,
-        set = function(self, v) self.value = v; lbl.Text = tostring(v) end,
-        applyTheme = function(self) lbl.TextColor3 = win0.ui:GetTheme().text end,
-        destroy = function(self) row:Destroy() end,
-    }
-end)
+selector:Toggle("aim_on", {
+    label = "Aimbot",
+    path = "combat.aimbot.on",
+    bindKey = Enum.KeyCode.E,
+})
 
 Build from schema
 
@@ -436,13 +408,64 @@ ui:Build({
     {
         id = "visuals",
         title = "Visuals",
-        Width = 250,
+        Width = 260,
         items = {
             { kind = "section", text = "ESP" },
             { kind = "toggle", id = "box_on", label = "Box", path = "cfg.esp.box" },
             { kind = "slider", id = "range", label = "Range", path = "cfg.esp.range", min = 100, max = 3000, step = 50 },
             { kind = "color", id = "accent", label = "Accent", path = "cfg.ui.accent" },
         },
+    },
+})
+
+Build from descriptors
+
+This is the more scalable route.
+
+Lua
+
+ui:BuildFromDescriptors({
+    {
+        path = "esp.target.on",
+        kind = "toggle",
+        label = "Target",
+        window = "Combat",
+        tab = "Target",
+        subtab = "Selector",
+        section = "Main",
+        order = 10,
+        default = false,
+    },
+    {
+        path = "esp.target.fov",
+        kind = "slider",
+        label = "FOV",
+        window = "Combat",
+        tab = "Target",
+        subtab = "Selector",
+        section = "Main",
+        order = 20,
+        min = 20,
+        max = 500,
+        step = 1,
+        default = 240,
+    },
+})
+
+Optional ordering/width:
+
+Lua
+
+ui:BuildFromDescriptors(descs, {
+    windowOrder = {
+        Combat = 1,
+        Visuals = 2,
+        Config = 3,
+    },
+    windowWidth = {
+        Combat = 300,
+        Visuals = 300,
+        Config = 260,
     },
 })
 
@@ -485,6 +508,10 @@ Overlay lookup
 Lua
 
 ui:GetOverlay("status")
+
+Dragging overlays
+
+    middle click and drag an overlay anywhere to move it
 
 Watermark and toasts
 Watermark
@@ -534,7 +561,7 @@ Register a custom widget builder
 
 Lua
 
-EasyUi.RegisterWidget("mywidget", function(win, id, opt)
+EasyUi.RegisterWidget("mywidget", function(target, id, opt)
     -- return widget
 end)
 
@@ -544,7 +571,8 @@ Lua
 
 EasyUi.RegisterPlugin("debug_panel", function(ui)
     local win = ui:Window("debug", "Debug")
-    win:Label("status", "Ready")
+    local tab = win:Tab("main", "Main")
+    tab:Label("status", "Ready")
     return win
 end)
 
@@ -588,6 +616,7 @@ Helpers
     Toolkit.RegisterPlugin
     Toolkit.CleanName
     Toolkit.Build(ui, schema)
+    Toolkit.BuildFromDescriptors(ui, descs, opt)
     Toolkit.Overlay(ui, id, opt)
     Toolkit.Watch(ui, path, fn, fire)
     Toolkit.Bind(ui, path, value)
@@ -596,27 +625,31 @@ Helpers
     Toolkit.GetWidget(ui, id)
     Toolkit.GetOverlay(ui, id)
     Toolkit.GetContainer(ui)
+    Toolkit.GetTab(win, id)
+    Toolkit.GetSubTab(tab, id)
 
-Setup check
+Setup summary
 
-EasyUi is streamlined in a useful way:
-Fast setup
+EasyUi now has two strong setup styles:
+Fast manual setup
 
-If you just want a menu:
+Use:
 
     new()
     Window()
-    a few widgets
+    Tab()
+    SubTab()
+    widgets
 
 Scalable setup
 
-If you want a bigger system:
+Use:
 
     Mount
     path-bound widgets
-    Build(schema)
+    BuildFromDescriptors(...)
     overlays
     plugins
     custom widgets
 
-That means it is easy to add/remove features without rewriting everything.
+That means it is easy to start small and still scale without rewriting everything later.
