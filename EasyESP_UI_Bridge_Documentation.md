@@ -1,18 +1,18 @@
 EasyESP UI Bridge
-Overview
+What it is
 
 EasyESP_UI_Bridge is the optional pairing layer between EasyESP and EasyUi.
 
 It is not required by either one.
 
-Its job is simple:
+Its job is to:
 
     mount esp.cfg into the UI store
-    build a default ESP settings layout
-    keep shared helper values for theme/profile/preset/config name
-    give you one link object for sync, apply, save, load, and detach
+    merge ESP descriptors with bridge-only descriptors
+    build a default UI from descriptors when possible
+    expose one link object for sync/apply/save/load/detach
 
-If you want both systems to stay separate, do not use the bridge.
+If you want EasyESP and EasyUi to stay separate, do not use the bridge.
 Quick start
 
 Lua
@@ -42,7 +42,9 @@ It:
 
     detaches any older bridge first
     mounts esp.cfg into the UI under a prefix
-    builds default bridge windows or a custom schema
+    seeds bridge helper values like theme/profile/preset/name
+    builds windows from descriptors when available
+    falls back to the old manual schema if needed
     returns a link object
 
 Returned object:
@@ -63,7 +65,7 @@ Lua
     detach = function() ... end,
 }
 
-Default behavior
+Default prefix
 
 Default prefix:
 
@@ -102,24 +104,52 @@ Then paths become:
     mainesp.target.fov
     mainesp.radar.on
 
-Default windows
+Descriptor-first bridge flow
+ESP descriptors
 
-The built-in schema creates:
+If EasyESP exposes descriptors, the bridge prefers those.
+Bridge descriptors
 
-    Combat
-    Visuals
-    Radar
-    World
-    Config
+The bridge also injects bridge-only descriptors for things like:
 
-Get the raw schema first:
+    theme
+    accent
+    profile
+    pack
+    preset
+    config name
+    save/load/apply buttons
+
+You can fetch the bridge-only descriptors:
+
+Lua
+
+local list = Bridge.Descriptors("esp")
+
+You can fetch the merged descriptor list:
+
+Lua
+
+local merged = Bridge.GetDescriptors("esp", esp)
+
+Default descriptor-driven build
+
+When available, the bridge now prefers:
+
+Lua
+
+ui:BuildFromDescriptors(descs, opt)
+
+That means the default bridge is already moving away from one giant hardcoded schema table.
+Schema fallback
+
+The bridge still keeps the older schema fallback path for compatibility:
 
 Lua
 
 local schema = Bridge.Schema("esp")
 
-Then edit it before attaching.
-Custom schema
+You can still force a custom schema:
 
 Lua
 
@@ -136,6 +166,36 @@ Bridge.Attach(ui, esp, {
             },
         },
     }
+})
+
+Window order and width
+
+When building from descriptors, the bridge applies default window ordering and widths.
+
+Default window order:
+
+    Combat
+    Visuals
+    Radar
+    World
+    Self
+    Config
+
+You can override it:
+
+Lua
+
+Bridge.Attach(ui, esp, {
+    windowOrder = {
+        Combat = 1,
+        Config = 2,
+        Visuals = 3,
+    },
+    windowWidth = {
+        Combat = 320,
+        Visuals = 300,
+        Config = 260,
+    },
 })
 
 Live theme sync
@@ -233,6 +293,8 @@ local tk = Bridge.Toolkit
 Helpers
 
     tk.Schema(prefix)
+    tk.Descriptors(prefix)
+    tk.GetDescriptors(prefix, esp)
     tk.Attach(ui, esp, opt)
     tk.Detach(ui)
     tk.ApplyTheme(link)
@@ -263,26 +325,18 @@ By default Pair:
     starts the ESP unless bridgeOpt.start == false
     attaches the bridge
 
-Setup check
+Setup summary
 
-The bridge is streamlined because it removes repetitive glue, not because it hides everything.
-Good use case
+The bridge now has two clear roles:
+Fast pairing layer
 
-Use it when you want:
+Use it when you want EasyUi and EasyESP working together quickly.
+Descriptor merge layer
 
-    a ready-made ESP control UI
-    synced theme/profile/preset controls
-    pair save/load
-    fast startup for both systems together
+Use it when you want to consume:
 
-Skip it when you want
+    ESP descriptors
+    bridge descriptors
+    descriptor-driven UI generation
 
-    EasyESP by itself
-    EasyUi by itself
-    a fully custom pairing layer
-
-That keeps the stack simple:
-
-    EasyUi stays standalone
-    EasyESP stays standalone
-    the bridge only handles pairing
+That means it stays useful without forcing either system to depend on the other.
