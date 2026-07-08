@@ -3,6 +3,7 @@ local Input = game:GetService("UserInputService")
 local Tween = game:GetService("TweenService")
 local Http = game:GetService("HttpService")
 local Run = game:GetService("RunService")
+local CAS = game:GetService("ContextActionService")
 
 local lp = Players.LocalPlayer
 
@@ -398,9 +399,32 @@ function Router.new(ui)
             return
         end
 
+        if ui._bindWidget and input.UserInputType == Enum.UserInputType.Keyboard then
+            local w = ui._bindWidget
+            ui._bindWidget = nil
+            if input.KeyCode == Enum.KeyCode.Escape then
+                if w.setBind then w:setBind(nil) end
+            else
+                if w.setBind then w:setBind(input.KeyCode) end
+            end
+            if w.render then
+                w:render(w.value)
+            end
+            return
+        end
+
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == ui.menuKey and not gp then
             ui:Toggle()
             return
+        end
+
+        if input.UserInputType == Enum.UserInputType.Keyboard and not gp and not Input:GetFocusedTextBox() then
+            for i = 1, #ui.widgets do
+                local w = ui.widgets[i]
+                if w and w.bindKey and w.activate and input.KeyCode == w.bindKey then
+                    safe(w.activate, w, input)
+                end
+            end
         end
 
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton3 or input.UserInputType == Enum.UserInputType.Touch then
@@ -492,6 +516,7 @@ function Widget.new(win, id, kind, opt)
         cons = {},
         unsubs = {},
         popup = nil,
+        bindKey = opt and (opt.bindKey or opt.bind),
         onChange = opt and opt.onChange,
         onPress = opt and opt.onPress,
     }, Widget)
@@ -511,6 +536,40 @@ end
 function Widget:get()
     return self.value
 end
+
+function Widget:setBind(key)
+    self.bindKey = key
+    if self.ui then
+        local name = tostring(self.opt.label or self.id)
+        if key then
+            self.ui:Toast("Bind", name .. " -> " .. tostring(key.Name), 1.2, "ok")
+        else
+            self.ui:Toast("Bind", name .. " bind cleared", 1.2, "warn")
+        end
+    end
+    return key
+end
+
+function Widget:getBind()
+    return self.bindKey
+end
+
+function Widget:beginBind(target)
+    if self.kind == "label" or self.kind == "section" or self.kind == "keybind" then
+        return
+    end
+    self.ui._bindWidget = self
+    if target and target:IsA("GuiObject") then
+        if target:IsA("TextButton") or target:IsA("TextBox") then
+            target.TextColor3 = self.ui.theme.accent
+        elseif target:FindFirstChildOfClass("UIStroke") then
+            target.UIStroke.Color = self.ui.theme.accent
+        end
+    end
+    self.ui:Toast("Bind", "Press a key for " .. tostring(self.opt.label or self.id) .. " (Esc to clear)", 1.4, "warn")
+end
+
+function Widget:activate() end
 
 function Widget:render(_) end
 
@@ -585,6 +644,10 @@ end
 
 local Window = {}
 Window.__index = Window
+local Tab = {}
+Tab.__index = Tab
+local SubTab = {}
+SubTab.__index = SubTab
 
 local G = (getgenv and getgenv()) or _G
 G.__EASY_STACK = G.__EASY_STACK or {}
@@ -599,15 +662,36 @@ local Widgets = {}
 local Plugins = {}
 local Alive = {}
 
-local function makeRow(win, h)
-    local t = win.ui.theme
+local function makeRow(target, h)
+    local t = target.ui.theme
     local row = mk("Frame", {
         Size = UDim2.new(1, 0, 0, h or 24),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ZIndex = win.frame.ZIndex + 2,
-    }, win.body)
+        ZIndex = target.frame.ZIndex + 2,
+    }, target.body)
     return row, t
+end
+
+local function makeScroll(parent, z)
+    local body = mk("ScrollingFrame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 3,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ClipsDescendants = true,
+        ZIndex = z,
+        Visible = true,
+    }, parent)
+    pad(6, 6, 6, 6, body)
+    local list = mk("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 4),
+    }, body)
+    return body, list
 end
 
 local function makeField(parent, theme, size, pos, anchor, z)
@@ -651,6 +735,16 @@ local function buttonText(parent, text, theme, size, z)
         ZIndex = z,
     }, parent)
     return b
+end
+
+local function attachBind(w, gui, target)
+    if not gui then return end
+    gui.Active = true
+    w:own(gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            w:beginBind(target or gui)
+        end
+    end))
 end
 
 local function hex(c)
@@ -735,6 +829,10 @@ function Widgets.button(win, id, opt)
     w:own(b.MouseButton1Click:Connect(function()
         safe(opt.onPress or opt.onClick or w.onPress or w.onChange, w)
     end))
+    function w:activate()
+        safe(opt.onPress or opt.onClick or w.onPress or w.onChange, w)
+    end
+    attachBind(w, shell, shell)
     function w:render(v)
         b.Text = tostring(v or opt.text or opt.label or id or "Button")
         shell.BackgroundColor3 = w.ui.theme.bg2
@@ -788,6 +886,10 @@ function Widgets.toggle(win, id, opt)
     w:own(hit.MouseButton1Click:Connect(function()
         w:set(not w.value)
     end))
+    function w:activate()
+        w:set(not w.value)
+    end
+    attachBind(w, row, shell)
     if w.path then
         if w.ui.store:get(w.path) == nil and opt.default ~= nil then
             w.ui.store:set(w.path, opt.default, { init = true, silent = true })
@@ -911,6 +1013,12 @@ function Widgets.slider(win, id, opt)
             })
         end
     end))
+    function w:activate()
+        local nextValue = w.value + w.step
+        if nextValue > w.max then nextValue = w.min end
+        w:set(nextValue)
+    end
+    attachBind(w, row, track)
     if w.path then
         if w.ui.store:get(w.path) == nil and opt.default ~= nil then
             w.ui.store:set(w.path, snap(opt.default), { init = true, silent = true })
@@ -999,6 +1107,17 @@ function Widgets.dropdown(win, id, opt)
             open()
         end
     end))
+    function w:activate()
+        if #w.items == 0 then return end
+        local idx = 1
+        for i, x in ipairs(w.items) do
+            if tostring(x) == tostring(w.value) then idx = i break end
+        end
+        idx = idx + 1
+        if idx > #w.items then idx = 1 end
+        w:set(w.items[idx])
+    end
+    attachBind(w, row, shell)
     if w.path then
         if w.ui.store:get(w.path) == nil and opt.default ~= nil then
             w.ui.store:set(w.path, w:validate(opt.default), { init = true, silent = true })
@@ -1077,6 +1196,17 @@ function Widgets.mode(win, id, opt)
             btn.TextColor3 = i == idx and w.ui.theme.text or w.ui.theme.dim
         end
     end
+    function w:activate()
+        if #items == 0 then return end
+        local idx = 1
+        for i, x in ipairs(items) do
+            if tostring(x) == tostring(w.value) then idx = i break end
+        end
+        idx = idx + 1
+        if idx > #items then idx = 1 end
+        w:set(items[idx])
+    end
+    attachBind(w, row, track)
     if w.path then
         if w.ui.store:get(w.path) == nil and opt.default ~= nil then
             w.ui.store:set(w.path, w:validate(opt.default), { init = true, silent = true })
@@ -1483,23 +1613,88 @@ local function parseOldArgs(kind, a, b, c, d, e)
     end
 end
 
+function Window:_activeTarget()
+    if self.activeTab then
+        if self.activeTab.activeSub then
+            return self.activeTab.activeSub
+        end
+        return self.activeTab
+    end
+    return self
+end
+
+function Window:_layoutTabs()
+    local tabH = #self.tabs > 0 and 22 or 0
+    local subH = (self.activeTab and #self.activeTab.subtabs > 0) and 20 or 0
+    self.tabBar.Visible = tabH > 0
+    self.subBar.Visible = subH > 0
+    self.tabBar.Size = UDim2.new(1, 0, 0, tabH)
+    self.subBar.Size = UDim2.new(1, 0, 0, subH)
+    self.tabBar.Position = UDim2.new(0, 0, 0, 24)
+    self.subBar.Position = UDim2.new(0, 0, 0, 24 + tabH)
+    local y = 24 + tabH + subH
+
+    self.body.Position = UDim2.new(0, 0, 0, y)
+    for i = 1, #self.tabs do
+        local tab = self.tabs[i]
+        tab.body.Position = UDim2.new(0, 0, 0, y)
+        for j = 1, #tab.subtabs do
+            local sub = tab.subtabs[j]
+            sub.body.Position = UDim2.new(0, 0, 0, y)
+        end
+    end
+end
+
 function Window:_refresh()
     if not self.frame or not self.frame.Parent then
         return
     end
-    local full = self.list.AbsoluteContentSize.Y + 12
+    self:_layoutTabs()
+    local active = self:_activeTarget()
+    local full = (active.list and active.list.AbsoluteContentSize.Y or 0) + 12
     local show = clamp(full, 0, self.maxH)
+    local tabH = #self.tabs > 0 and 22 or 0
+    local subH = (self.activeTab and #self.activeTab.subtabs > 0) and 20 or 0
+
+    self.body.Visible = active == self and self.open
+    for i = 1, #self.tabs do
+        local tab = self.tabs[i]
+        tab.body.Visible = active == tab and self.open
+        if tab.button then
+            tab.button.TextColor3 = (self.activeTab == tab) and self.ui.theme.text or self.ui.theme.dim
+            if tab.fill then
+                tab.fill.BackgroundTransparency = (self.activeTab == tab) and 0 or 1
+                tab.fill.BackgroundColor3 = self.ui.theme.accentSoft
+            end
+        end
+        for j = 1, #tab.subtabs do
+            local sub = tab.subtabs[j]
+            sub.body.Visible = active == sub and self.open
+            if sub.button then
+                sub.button.TextColor3 = (tab.activeSub == sub) and self.ui.theme.text or self.ui.theme.dim
+                if sub.fill then
+                    sub.fill.BackgroundTransparency = (tab.activeSub == sub) and 0 or 1
+                    sub.fill.BackgroundColor3 = self.ui.theme.accentSoft
+                end
+            end
+        end
+    end
+
     if not self.open then
         self.body.Visible = false
+        self.tabBar.Visible = false
+        self.subBar.Visible = false
         self.frame.Size = UDim2.new(0, self.w, 0, 24)
         self.collapse.Text = "+"
         self.collapse.TextColor3 = self.ui.theme.dim
         return
     end
-    self.body.Visible = true
-    self.body.Size = UDim2.new(1, 0, 0, show)
-    self.frame.Size = UDim2.new(0, self.w, 0, 24 + show)
-    self.body.CanvasSize = UDim2.new(0, 0, 0, full)
+
+    if active.body then
+        active.body.Size = UDim2.new(1, 0, 0, show)
+        active.body.CanvasSize = UDim2.new(0, 0, 0, full)
+    end
+    self.frame.Size = UDim2.new(0, self.w, 0, 24 + tabH + subH + show)
     self.collapse.Text = "–"
     self.collapse.TextColor3 = self.ui.theme.accent
     task.defer(function()
@@ -1574,142 +1769,157 @@ function Window:_add(widget)
     return widget
 end
 
-function Window:Section(text)
-    return self:_add(Widgets.section(self, cleanName(text), { text = text }))
-end
-
-function Window:Label(id, text)
-    if text == nil then
-        text, id = id, cleanName(id)
+local function bindTargetMethods(proto)
+    function proto:Section(text)
+        return self:_add(Widgets.section(self, cleanName(text), { text = text }))
     end
-    return self:_add(Widgets.label(self, id, { text = text }))
-end
 
-function Window:Button(id, text, opt)
-    if type(text) == "table" then
-        opt, text = text, id
-    elseif type(text) == "function" then
-        opt = { onPress = text, text = id }
-        id = cleanName(id)
-    else
+    function proto:Label(id, text)
+        if text == nil then
+            text, id = id, cleanName(id)
+        end
+        return self:_add(Widgets.label(self, id, { text = text }))
+    end
+
+    function proto:Button(id, text, opt)
+        if type(text) == "table" then
+            opt, text = text, id
+        elseif type(text) == "function" then
+            opt = { onPress = text, text = id }
+            id = cleanName(id)
+        else
+            opt = opt or {}
+            opt.text = text
+        end
+        return self:_add(Widgets.button(self, id, opt))
+    end
+
+    function proto:Toggle(id, opt)
+        return self:_add(Widgets.toggle(self, id, opt or {}))
+    end
+
+    function proto:Slider(id, opt)
+        return self:_add(Widgets.slider(self, id, opt or {}))
+    end
+
+    function proto:Dropdown(id, opt)
+        return self:_add(Widgets.dropdown(self, id, opt or {}))
+    end
+
+    function proto:Mode(id, opt)
+        return self:_add(Widgets.mode(self, id, opt or {}))
+    end
+
+    function proto:Keybind(id, opt)
+        return self:_add(Widgets.keybind(self, id, opt or {}))
+    end
+
+    function proto:Box(id, opt)
+        return self:_add(Widgets.box(self, id, opt or {}))
+    end
+
+    function proto:Color(id, opt)
+        return self:_add(Widgets.color(self, id, opt or {}))
+    end
+
+    function proto:Meter(id, opt)
+        return self:_add(Widgets.meter(self, id, opt or {}))
+    end
+
+    function proto:Custom(id, builder, opt)
         opt = opt or {}
-        opt.text = text
+        opt.build = builder
+        return self:_add(Widgets.custom(self, id, opt))
     end
-    return self:_add(Widgets.button(self, id, opt))
-end
 
-function Window:Toggle(id, opt)
-    return self:_add(Widgets.toggle(self, id, opt or {}))
-end
+    function proto:AddCustom(builder, ...)
+        assert(type(builder) == "function", "AddCustom expects function")
+        local ctx = {
+            ui = self.ui,
+            win = self.win or self,
+            target = self,
+            body = self.body,
+            theme = self.ui.theme,
+            tk = UI.Toolkit,
+            mk = mk,
+            corner = corner,
+            pad = pad,
+            stroke = stroke,
+            tween = tween,
+        }
+        local out = builder(self, ctx, ...)
+        if out then
+            return self:_add(out)
+        end
+    end
 
-function Window:Slider(id, opt)
-    return self:_add(Widgets.slider(self, id, opt or {}))
-end
+    function proto:AddLabel(text)
+        local id, opt = parseOldArgs("label", text)
+        return self:_add(Widgets.label(self, id, opt))
+    end
 
-function Window:Dropdown(id, opt)
-    return self:_add(Widgets.dropdown(self, id, opt or {}))
-end
+    function proto:AddSeparator(text)
+        local id, opt = parseOldArgs("section", text)
+        return self:_add(Widgets.section(self, id, opt))
+    end
 
-function Window:Mode(id, opt)
-    return self:_add(Widgets.mode(self, id, opt or {}))
-end
+    function proto:AddButton(text, cb)
+        local id, opt = parseOldArgs("button", text, cb)
+        return self:_add(Widgets.button(self, id, opt))
+    end
 
-function Window:Keybind(id, opt)
-    return self:_add(Widgets.keybind(self, id, opt or {}))
-end
+    function proto:AddToggle(text, default, cb)
+        local id, opt = parseOldArgs("toggle", text, default, cb)
+        return self:_add(Widgets.toggle(self, id, opt))
+    end
 
-function Window:Box(id, opt)
-    return self:_add(Widgets.box(self, id, opt or {}))
-end
+    function proto:AddSlider(text, min0, max0, default, step, cb)
+        local id, opt = parseOldArgs("slider", text, min0, max0, default, step)
+        opt.onChange = cb
+        return self:_add(Widgets.slider(self, id, opt))
+    end
 
-function Window:Color(id, opt)
-    return self:_add(Widgets.color(self, id, opt or {}))
-end
+    function proto:AddDropdown(text, items, default, cb)
+        local id, opt = parseOldArgs("dropdown", text, items, default, cb)
+        return self:_add(Widgets.dropdown(self, id, opt))
+    end
 
-function Window:Meter(id, opt)
-    return self:_add(Widgets.meter(self, id, opt or {}))
-end
+    function proto:AddModeToggle(text, items, default, cb)
+        local id, opt = parseOldArgs("mode", text, items, default, cb)
+        return self:_add(Widgets.mode(self, id, opt))
+    end
 
-function Window:Custom(id, builder, opt)
-    opt = opt or {}
-    opt.build = builder
-    return self:_add(Widgets.custom(self, id, opt))
-end
+    function proto:AddKeybind(text, default, cb)
+        local id, opt = parseOldArgs("keybind", text, default, cb)
+        return self:_add(Widgets.keybind(self, id, opt))
+    end
 
-function Window:AddCustom(builder, ...)
-    assert(type(builder) == "function", "AddCustom expects function")
-    local ctx = {
-        ui = self.ui,
-        win = self,
-        body = self.body,
-        theme = self.ui.theme,
-        tk = UI.Toolkit,
-        mk = mk,
-        corner = corner,
-        pad = pad,
-        stroke = stroke,
-        tween = tween,
-    }
-    local out = builder(self, ctx, ...)
-    if out then
-        return self:_add(out)
+    function proto:AddTextBox(text, default, placeholder, cb)
+        local id, opt = parseOldArgs("box", text, default, placeholder, cb)
+        return self:_add(Widgets.box(self, id, opt))
+    end
+
+    function proto:AddColorPicker(text, default, cb)
+        local id, opt = parseOldArgs("color", text, default, cb)
+        return self:_add(Widgets.color(self, id, opt))
+    end
+
+    function proto:AddProgressBar(text, default, cb)
+        local id, opt = parseOldArgs("meter", text, default, cb)
+        return self:_add(Widgets.meter(self, id, opt))
     end
 end
 
-function Window:AddLabel(text)
-    local id, opt = parseOldArgs("label", text)
-    return self:_add(Widgets.label(self, id, opt))
+bindTargetMethods(Window)
+bindTargetMethods(Tab)
+bindTargetMethods(SubTab)
+
+function Window:GetTab(id)
+    return self.tabById[id]
 end
 
-function Window:AddSeparator(text)
-    local id, opt = parseOldArgs("section", text)
-    return self:_add(Widgets.section(self, id, opt))
-end
-
-function Window:AddButton(text, cb)
-    local id, opt = parseOldArgs("button", text, cb)
-    return self:_add(Widgets.button(self, id, opt))
-end
-
-function Window:AddToggle(text, default, cb)
-    local id, opt = parseOldArgs("toggle", text, default, cb)
-    return self:_add(Widgets.toggle(self, id, opt))
-end
-
-function Window:AddSlider(text, min0, max0, default, step, cb)
-    local id, opt = parseOldArgs("slider", text, min0, max0, default, step)
-    opt.onChange = cb
-    return self:_add(Widgets.slider(self, id, opt))
-end
-
-function Window:AddDropdown(text, items, default, cb)
-    local id, opt = parseOldArgs("dropdown", text, items, default, cb)
-    return self:_add(Widgets.dropdown(self, id, opt))
-end
-
-function Window:AddModeToggle(text, items, default, cb)
-    local id, opt = parseOldArgs("mode", text, items, default, cb)
-    return self:_add(Widgets.mode(self, id, opt))
-end
-
-function Window:AddKeybind(text, default, cb)
-    local id, opt = parseOldArgs("keybind", text, default, cb)
-    return self:_add(Widgets.keybind(self, id, opt))
-end
-
-function Window:AddTextBox(text, default, placeholder, cb)
-    local id, opt = parseOldArgs("box", text, default, placeholder, cb)
-    return self:_add(Widgets.box(self, id, opt))
-end
-
-function Window:AddColorPicker(text, default, cb)
-    local id, opt = parseOldArgs("color", text, default, cb)
-    return self:_add(Widgets.color(self, id, opt))
-end
-
-function Window:AddProgressBar(text, default, cb)
-    local id, opt = parseOldArgs("meter", text, default, cb)
-    return self:_add(Widgets.meter(self, id, opt))
+function Tab:GetSubTab(id)
+    return self.subtabById[id]
 end
 
 function Window:SetTitle(t)
@@ -1718,6 +1928,129 @@ end
 
 function Window:SetVisible(v)
     self.frame.Visible = v and true or false
+end
+
+function Window:_makeTabButton(parent, text, small)
+    local h = small and 18 or 20
+    local shell = mk("Frame", {
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.new(0, 0, 0, h),
+        BackgroundColor3 = self.ui.theme.bg2,
+        BorderSizePixel = 0,
+        ZIndex = self.frame.ZIndex + 2,
+    }, parent)
+    corner(5, shell)
+    stroke(self.ui.theme.line, 1, 0, shell)
+    pad(0, 0, 8, 8, shell)
+    local fill = mk("Frame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = self.ui.theme.accentSoft,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = shell.ZIndex + 1,
+    }, shell)
+    corner(5, fill)
+    local btn = mk("TextButton", {
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundTransparency = 1,
+        AutoButtonColor = false,
+        Text = tostring(text or "Tab"),
+        Font = Enum.Font.Gotham,
+        TextSize = small and 11 or 12,
+        TextColor3 = self.ui.theme.dim,
+        ZIndex = shell.ZIndex + 2,
+    }, shell)
+    return shell, btn, fill
+end
+
+function Window:Tab(id, title)
+    id = id or cleanName(title)
+    if self.tabById[id] then
+        return self.tabById[id]
+    end
+    local shell, btn, fill = self:_makeTabButton(self.tabBar, title or id, false)
+    local body, list = makeScroll(self.frame, self.frame.ZIndex + 1)
+    body.Visible = false
+    body.ScrollBarImageColor3 = self.ui.theme.lineHi
+    local tab = setmetatable({
+        ui = self.ui,
+        win = self,
+        frame = self.frame,
+        id = id,
+        title = title or id,
+        widgets = {},
+        subtabs = {},
+        subtabById = {},
+        activeSub = nil,
+        buttonShell = shell,
+        button = btn,
+        fill = fill,
+        body = body,
+        list = list,
+    }, Tab)
+    function tab:_add(widget)
+        self.widgets[#self.widgets + 1] = widget
+        return self.win:_add(widget)
+    end
+    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        self.win:_refresh()
+    end)
+    btn.MouseButton1Click:Connect(function()
+        self.win.activeTab = tab
+        self.win:_refresh()
+    end)
+    self.tabs[#self.tabs + 1] = tab
+    self.tabById[id] = tab
+    if not self.activeTab then
+        self.activeTab = tab
+    end
+    self:_refresh()
+    return tab
+end
+
+function Tab:SubTab(id, title)
+    id = id or cleanName(title)
+    if self.subtabById[id] then
+        return self.subtabById[id]
+    end
+    local shell, btn, fill = self.win:_makeTabButton(self.win.subBar, title or id, true)
+    local body, list = makeScroll(self.win.frame, self.win.frame.ZIndex + 1)
+    body.Visible = false
+    body.ScrollBarImageColor3 = self.ui.theme.lineHi
+    local sub = setmetatable({
+        ui = self.ui,
+        win = self.win,
+        tab = self,
+        frame = self.frame,
+        id = id,
+        title = title or id,
+        widgets = {},
+        buttonShell = shell,
+        button = btn,
+        fill = fill,
+        body = body,
+        list = list,
+    }, SubTab)
+    function sub:_add(widget)
+        self.widgets[#self.widgets + 1] = widget
+        return self.win:_add(widget)
+    end
+    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        self.win:_refresh()
+    end)
+    btn.MouseButton1Click:Connect(function()
+        self.activeSub = sub
+        self.win.activeTab = self
+        self.win:_refresh()
+    end)
+    self.subtabs[#self.subtabs + 1] = sub
+    self.subtabById[id] = sub
+    if not self.activeSub then
+        self.activeSub = sub
+    end
+    self.win:_refresh()
+    return sub
 end
 
 function Window:Open()
@@ -1752,6 +2085,9 @@ function Window:Destroy()
             w:destroy()
         end
     end
+    self.tabs = {}
+    self.tabById = {}
+    self.activeTab = nil
     for i = #self.ui.windows, 1, -1 do
         if self.ui.windows[i] == self then
             remove(self.ui.windows, i)
@@ -1803,6 +2139,8 @@ function UI.new(opt)
     self._top = 1000
     self._nextX = opt.StartX or 16
     self._nextY = opt.StartY or 54
+    self._bindWidget = nil
+    self._casAction = "EasyUi_M3_" .. self.id
 
     local h = host()
     for _, x in ipairs(h:GetChildren()) do
@@ -1864,6 +2202,24 @@ function UI.new(opt)
 
     self.router = Router.new(self)
     self:_watermark()
+
+    pcall(function()
+        local sink = function(_, state)
+            if state ~= Enum.UserInputState.Begin then
+                return Enum.ContextActionResult.Pass
+            end
+            local pos = Input:GetMouseLocation()
+            if self:_uiHit(pos) then
+                return Enum.ContextActionResult.Sink
+            end
+            return Enum.ContextActionResult.Pass
+        end
+        if CAS.BindActionAtPriority then
+            CAS:BindActionAtPriority(self._casAction, sink, false, Enum.ContextActionPriority.High.Value + 50, Enum.UserInputType.MouseButton3)
+        else
+            CAS:BindAction(self._casAction, sink, false, Enum.UserInputType.MouseButton3)
+        end
+    end)
 
     self.cons[#self.cons + 1] = Run.RenderStepped:Connect(function()
         if self._wm and self._wm.Visible then
@@ -2013,6 +2369,45 @@ function UI:_windowAt(pos)
     return best
 end
 
+function UI:_overlayAt(pos)
+    local best, z = nil, -math.huge
+    for _, ov in pairs(self.overlays) do
+        local frame = ov and ov.frame
+        if frame and frame.Visible then
+            local p = frame.AbsolutePosition
+            local s = frame.AbsoluteSize
+            if pos.X >= p.X and pos.X <= p.X + s.X and pos.Y >= p.Y and pos.Y <= p.Y + s.Y then
+                if frame.ZIndex > z then
+                    best = ov
+                    z = frame.ZIndex
+                end
+            end
+        end
+    end
+    return best
+end
+
+function UI:_watermarkAt(pos)
+    local frame = self._wm
+    if not frame or not frame.Visible then
+        return false
+    end
+    local p = frame.AbsolutePosition
+    local s = frame.AbsoluteSize
+    return pos.X >= p.X and pos.X <= p.X + s.X and pos.Y >= p.Y and pos.Y <= p.Y + s.Y
+end
+
+function UI:_uiHit(pos)
+    if self._popup and self._popup.Parent then
+        local p = self._popup.AbsolutePosition
+        local s = self._popup.AbsoluteSize
+        if pos.X >= p.X and pos.X <= p.X + s.X and pos.Y >= p.Y and pos.Y <= p.Y + s.Y then
+            return true
+        end
+    end
+    return self:_windowAt(pos) ~= nil or self:_overlayAt(pos) ~= nil or self:_watermarkAt(pos)
+end
+
 function UI:_resolveWindow(win)
     if not win or not win.frame then
         return
@@ -2130,11 +2525,28 @@ function UI:ApplyTheme()
             w.dot.BackgroundColor3 = self.theme.accent
             w.collapse.TextColor3 = w.open and self.theme.accent or self.theme.dim
             w.body.ScrollBarImageColor3 = self.theme.lineHi
+            for ti = 1, #w.tabs do
+                local tab = w.tabs[ti]
+                if tab.buttonShell and tab.buttonShell:FindFirstChildOfClass("UIStroke") then
+                    tab.buttonShell.BackgroundColor3 = self.theme.bg2
+                    tab.buttonShell.UIStroke.Color = self.theme.line
+                end
+                tab.body.ScrollBarImageColor3 = self.theme.lineHi
+                for si = 1, #tab.subtabs do
+                    local sub = tab.subtabs[si]
+                    if sub.buttonShell and sub.buttonShell:FindFirstChildOfClass("UIStroke") then
+                        sub.buttonShell.BackgroundColor3 = self.theme.bg2
+                        sub.buttonShell.UIStroke.Color = self.theme.line
+                    end
+                    sub.body.ScrollBarImageColor3 = self.theme.lineHi
+                end
+            end
             for j = 1, #w.widgets do
                 if w.widgets[j] then
                     w.widgets[j]:applyTheme(self.theme)
                 end
             end
+            w:_refresh()
         end
     end
     self:_refreshWatermark()
@@ -2162,6 +2574,9 @@ function UI:Window(id, title, opt)
         ui = self,
         id = id,
         widgets = {},
+        tabs = {},
+        tabById = {},
+        activeTab = nil,
         w = opt.Width or opt.width or 250,
         maxH = opt.MaxHeight or opt.maxHeight or self.maxH,
         open = opt.Open ~= false and opt.open ~= false,
@@ -2212,6 +2627,36 @@ function UI:Window(id, title, opt)
         ZIndex = header.ZIndex + 1,
     }, header)
 
+    local tabBar = mk("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 24),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Visible = false,
+        ZIndex = frame.ZIndex + 1,
+    }, frame)
+    local tabList = mk("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 4),
+    }, tabBar)
+    pad(4, 0, 6, 6, tabBar)
+
+    local subBar = mk("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 24),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Visible = false,
+        ZIndex = frame.ZIndex + 1,
+    }, frame)
+    local subList = mk("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 4),
+    }, subBar)
+    pad(2, 0, 6, 6, subBar)
+
     local body = mk("ScrollingFrame", {
         Size = UDim2.new(1, 0, 0, 0),
         Position = UDim2.new(0, 0, 0, 24),
@@ -2235,6 +2680,10 @@ function UI:Window(id, title, opt)
     selfWin.title = titleLbl
     selfWin.dot = dot
     selfWin.collapse = collapse
+    selfWin.tabBar = tabBar
+    selfWin.tabList = tabList
+    selfWin.subBar = subBar
+    selfWin.subList = subList
     selfWin.body = body
     selfWin.list = list
 
@@ -2317,6 +2766,142 @@ function UI:Build(spec)
     end
     self:_resolveAll()
     return out
+end
+
+function UI:BuildFromDescriptors(descs, opt)
+    opt = opt or {}
+    local grouped = {}
+    for i = 1, #(descs or {}) do
+        local d = descs[i]
+        local winName = d.window or opt.window or "Main"
+        local tabName = d.tab
+        local subName = d.subtab
+        grouped[winName] = grouped[winName] or { items = {}, tabs = {}, order = d.windowOrder or 0, width = d.windowWidth }
+        local g = grouped[winName]
+        g.order = g.order or d.windowOrder or 0
+        g.width = g.width or d.windowWidth
+        if tabName and tabName ~= "" then
+            g.tabs[tabName] = g.tabs[tabName] or { subtabs = {}, items = {}, order = d.tabOrder or 0 }
+            local tg = g.tabs[tabName]
+            tg.order = tg.order or d.tabOrder or 0
+            if subName and subName ~= "" then
+                tg.subtabs[subName] = tg.subtabs[subName] or { items = {}, order = d.subtabOrder or 0 }
+                local sg = tg.subtabs[subName]
+                sg.order = sg.order or d.subtabOrder or 0
+                sg.items[#sg.items + 1] = d
+            else
+                tg.items[#tg.items + 1] = d
+            end
+        else
+            g.items[#g.items + 1] = d
+        end
+    end
+
+    local wins = {}
+    local function sortItems(items)
+        table.sort(items, function(a, b)
+            local sa, sb = tostring(a.section or ""), tostring(b.section or "")
+            if sa ~= sb then return sa < sb end
+            return (a.order or 0) < (b.order or 0)
+        end)
+    end
+
+    local function addItems(target, items)
+        sortItems(items)
+        local lastSection
+        for i = 1, #items do
+            local d = items[i]
+            local kind = tostring(d.kind or "label"):lower()
+            if kind ~= "section" and kind ~= "separator" and d.section and d.section ~= lastSection then
+                target:Section(d.section)
+                lastSection = d.section
+            end
+            local id = d.id or cleanName((d.path or d.label or kind):gsub("[%.]", "_"))
+            if kind == "section" or kind == "separator" then
+                target:Section(d.text or d.label or d.section or id)
+            elseif kind == "toggle" then
+                target:Toggle(id, d)
+            elseif kind == "slider" then
+                target:Slider(id, d)
+            elseif kind == "dropdown" then
+                target:Dropdown(id, d)
+            elseif kind == "mode" then
+                target:Mode(id, d)
+            elseif kind == "keybind" then
+                target:Keybind(id, d)
+            elseif kind == "box" or kind == "textbox" or kind == "number" then
+                target:Box(id, d)
+            elseif kind == "color" or kind == "colorpicker" then
+                target:Color(id, d)
+            elseif kind == "meter" or kind == "progress" then
+                target:Meter(id, d)
+            elseif kind == "button" then
+                target:Button(id, d.text or d.label or id, d)
+            elseif kind == "label" or kind == "note" then
+                target:Label(id, d.text or d.label or "")
+            end
+        end
+    end
+
+    local names = {}
+    for name in pairs(grouped) do names[#names + 1] = name end
+    table.sort(names, function(a, b)
+        local ga, gb = grouped[a], grouped[b]
+        local oa = (opt.windowOrder and opt.windowOrder[a]) or ga.order or 0
+        local ob = (opt.windowOrder and opt.windowOrder[b]) or gb.order or 0
+        if oa ~= ob then return oa < ob end
+        return tostring(a) < tostring(b)
+    end)
+
+    for i = 1, #names do
+        local name = names[i]
+        local g = grouped[name]
+        local hasTabs = next(g.tabs) ~= nil
+        if hasTabs and #g.items > 0 then
+            g.tabs[opt.defaultTab or "Main"] = g.tabs[opt.defaultTab or "Main"] or { subtabs = {}, items = {}, order = -math.huge }
+            local targetTab = g.tabs[opt.defaultTab or "Main"]
+            for ii = 1, #g.items do
+                targetTab.items[#targetTab.items + 1] = g.items[ii]
+            end
+            g.items = {}
+        end
+        local width = (opt.windowWidth and opt.windowWidth[name]) or g.width or opt.Width or 280
+        local win = self:Window(cleanName(name), name, { Width = width })
+        addItems(win, g.items)
+        local tabNames = {}
+        for tn in pairs(g.tabs) do tabNames[#tabNames + 1] = tn end
+        table.sort(tabNames, function(a, b)
+            local ta, tb = g.tabs[a], g.tabs[b]
+            local oa = ta.order or 0
+            local ob = tb.order or 0
+            if oa ~= ob then return oa < ob end
+            return tostring(a) < tostring(b)
+        end)
+        for ti = 1, #tabNames do
+            local tabName = tabNames[ti]
+            local tg = g.tabs[tabName]
+            local tab = win:Tab(cleanName(tabName), tabName)
+            addItems(tab, tg.items)
+            local subNames = {}
+            for sn in pairs(tg.subtabs) do subNames[#subNames + 1] = sn end
+            table.sort(subNames, function(a, b)
+                local sa, sb = tg.subtabs[a], tg.subtabs[b]
+                local oa = sa.order or 0
+                local ob = sb.order or 0
+                if oa ~= ob then return oa < ob end
+                return tostring(a) < tostring(b)
+            end)
+            for si = 1, #subNames do
+                local subName = subNames[si]
+                local sg = tg.subtabs[subName]
+                local sub = tab:SubTab(cleanName(subName), subName)
+                addItems(sub, sg.items)
+            end
+        end
+        wins[#wins + 1] = win
+    end
+    self:_resolveAll()
+    return wins
 end
 
 function UI:Overlay(id, opt)
@@ -2532,6 +3117,7 @@ end
 function UI:ExportConfig()
     local paths = {}
     local locals = {}
+    local binds = {}
     for _, w in ipairs(self.widgets) do
         if w.kind ~= "button" and w.kind ~= "label" and w.kind ~= "section" then
             if w.path then
@@ -2539,6 +3125,9 @@ function UI:ExportConfig()
             elseif w.opt.persist then
                 locals[w.id] = pack(w:get())
             end
+        end
+        if w.getBind and w:getBind() then
+            binds[w.id] = pack(w:getBind())
         end
     end
     local out = {
@@ -2550,6 +3139,7 @@ function UI:ExportConfig()
         ui = self:_uiState(),
         values = paths,
         locals = locals,
+        binds = binds,
     }
     return Http:JSONEncode(out)
 end
@@ -2605,6 +3195,14 @@ function UI:ImportConfig(str)
             local w = self.widgetById[id]
             if w then
                 w:set(unpackValue(value), true)
+            end
+        end
+    end
+    if type(data.binds) == "table" then
+        for id, value in pairs(data.binds) do
+            local w = self.widgetById[id]
+            if w and w.setBind then
+                w:setBind(unpackValue(value))
             end
         end
     end
@@ -2760,6 +3358,9 @@ function UI:Destroy()
             ov:Destroy()
         end
     end
+    pcall(function()
+        CAS:UnbindAction(self._casAction)
+    end)
     if self.router then
         self.router:destroy()
         self.router = nil
@@ -2847,6 +3448,7 @@ local Toolkit = {
     RegisterPlugin = UI.RegisterPlugin,
     CleanName = cleanName,
     Build = function(ui, spec) return ui:Build(spec) end,
+    BuildFromDescriptors = function(ui, descs, opt) return ui:BuildFromDescriptors(descs, opt) end,
     Overlay = function(ui, id, opt) return ui:Overlay(id, opt) end,
     Watch = function(ui, path, fn, fire) return ui:Watch(path, fn, fire) end,
     Bind = function(ui, path, value) return ui:Set(path, value) end,
@@ -2855,6 +3457,8 @@ local Toolkit = {
     GetWidget = function(ui, id) return ui:GetWidget(id) end,
     GetOverlay = function(ui, id) return ui:GetOverlay(id) end,
     GetContainer = function(ui) return ui:GetContainer() end,
+    GetTab = function(win, id) return win and win.GetTab and win:GetTab(id) end,
+    GetSubTab = function(tab, id) return tab and tab.GetSubTab and tab:GetSubTab(id) end,
 }
 
 UI.Toolkit = Toolkit
