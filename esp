@@ -7,6 +7,7 @@ local Run = game:GetService("RunService")
 local Input = game:GetService("UserInputService")
 local Light = game:GetService("Lighting")
 local Http = game:GetService("HttpService")
+local CAS = game:GetService("ContextActionService")
 
 local lp = Players.LocalPlayer
 local cam = workspace.CurrentCamera
@@ -145,6 +146,34 @@ local function cleanName(s)
         s = "default"
     end
     return s
+end
+
+local function pathGet(t, path)
+    local node = t
+    for part in tostring(path or ""):gmatch("[^%.]+") do
+        if type(node) ~= "table" then
+            return nil
+        end
+        node = node[part]
+    end
+    return node
+end
+
+local function desc(path, kind, label, extra)
+    local d = {
+        path = path,
+        kind = kind,
+        label = label,
+        bindable = kind ~= "label" and kind ~= "section" and kind ~= "note",
+        resettable = true,
+        persist = true,
+    }
+    if type(extra) == "table" then
+        for k, v in pairs(extra) do
+            d[k] = v
+        end
+    end
+    return d
 end
 
 local function pack(v)
@@ -637,6 +666,100 @@ local function defaults()
     }
 end
 
+local DESCRIPTOR_DEFAULTS = defaults()
+
+local DESCRIPTORS = {
+    desc("target.on", "toggle", "Target", { window = "Combat", tab = "Target", subtab = "Selector", section = "Main", order = 10, default = pathGet(DESCRIPTOR_DEFAULTS, "target.on"), desc = "Enable target selection." }),
+    desc("target.fov", "slider", "FOV", { window = "Combat", tab = "Target", subtab = "Selector", section = "Main", order = 20, min = 20, max = 500, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "target.fov"), desc = "Screen-space radius used for target selection." }),
+    desc("target.showFov", "toggle", "Show FOV", { window = "Combat", tab = "Target", subtab = "Selector", section = "Main", order = 30, default = pathGet(DESCRIPTOR_DEFAULTS, "target.showFov") }),
+    desc("target.visOnly", "toggle", "Visible Only", { window = "Combat", tab = "Target", subtab = "Checks", section = "Checks", order = 40, default = pathGet(DESCRIPTOR_DEFAULTS, "target.visOnly") }),
+    desc("target.friends", "toggle", "Include Friends", { window = "Combat", tab = "Target", subtab = "Checks", section = "Checks", order = 50, default = pathGet(DESCRIPTOR_DEFAULTS, "target.friends") }),
+    desc("target.allies", "toggle", "Include Allies", { window = "Combat", tab = "Target", subtab = "Checks", section = "Checks", order = 60, default = pathGet(DESCRIPTOR_DEFAULTS, "target.allies") }),
+    desc("target.brackets", "toggle", "Brackets", { window = "Combat", tab = "Target", subtab = "Visuals", section = "Display", order = 70, default = pathGet(DESCRIPTOR_DEFAULTS, "target.brackets") }),
+    desc("target.line", "toggle", "Snapline", { window = "Combat", tab = "Target", subtab = "Visuals", section = "Display", order = 80, default = pathGet(DESCRIPTOR_DEFAULTS, "target.line") }),
+
+    desc("arrow.on", "toggle", "Arrows", { window = "Combat", tab = "Offscreen", section = "Arrows", order = 90, default = pathGet(DESCRIPTOR_DEFAULTS, "arrow.on") }),
+    desc("arrow.rad", "slider", "Radius", { window = "Combat", tab = "Offscreen", section = "Arrows", order = 100, min = 80, max = 350, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "arrow.rad") }),
+    desc("arrow.size", "slider", "Size", { window = "Combat", tab = "Offscreen", section = "Arrows", order = 110, min = 8, max = 28, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "arrow.size") }),
+    desc("arrow.dist", "toggle", "Distance Text", { window = "Combat", tab = "Offscreen", section = "Arrows", order = 120, default = pathGet(DESCRIPTOR_DEFAULTS, "arrow.dist") }),
+
+    desc("box.on", "toggle", "Box", { window = "Visuals", tab = "Box", subtab = "Core", section = "Main", order = 10, default = pathGet(DESCRIPTOR_DEFAULTS, "box.on") }),
+    desc("box.kind", "dropdown", "Style", { window = "Visuals", tab = "Box", subtab = "Core", section = "Main", order = 20, items = { "corner", "box", "3d", "3dcorner" }, default = pathGet(DESCRIPTOR_DEFAULTS, "box.kind") }),
+    desc("box.mode", "dropdown", "Color Mode", { window = "Visuals", tab = "Box", subtab = "Core", section = "Main", order = 30, items = { "static", "team", "hp", "dist" }, default = pathGet(DESCRIPTOR_DEFAULTS, "box.mode") }),
+    desc("box.w", "slider", "Thickness", { window = "Visuals", tab = "Box", subtab = "Core", section = "Main", order = 40, min = 1, max = 4, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "box.w") }),
+    desc("box.fill", "toggle", "Fill", { window = "Visuals", tab = "Box", subtab = "Fill", section = "Fill", order = 50, default = pathGet(DESCRIPTOR_DEFAULTS, "box.fill") }),
+    desc("box.fillA", "slider", "Fill Alpha", { window = "Visuals", tab = "Box", subtab = "Fill", section = "Fill", order = 60, min = 0, max = 1, step = 0.01, decimals = 2, default = pathGet(DESCRIPTOR_DEFAULTS, "box.fillA") }),
+    desc("box.col", "color", "Accent", { window = "Visuals", tab = "Box", subtab = "Color", section = "Color", order = 70, default = pathGet(DESCRIPTOR_DEFAULTS, "box.col") }),
+    desc("box.fillCol", "color", "Fill Color", { window = "Visuals", tab = "Box", subtab = "Color", section = "Color", order = 80, default = pathGet(DESCRIPTOR_DEFAULTS, "box.fillCol") }),
+
+    desc("hp.on", "toggle", "Health Bar", { window = "Visuals", tab = "Labels", section = "Bars", order = 90, default = pathGet(DESCRIPTOR_DEFAULTS, "hp.on") }),
+    desc("name.on", "toggle", "Name", { window = "Visuals", tab = "Labels", section = "Text", order = 100, default = pathGet(DESCRIPTOR_DEFAULTS, "name.on") }),
+    desc("dist.on", "toggle", "Distance", { window = "Visuals", tab = "Labels", section = "Text", order = 110, default = pathGet(DESCRIPTOR_DEFAULTS, "dist.on") }),
+    desc("flags.on", "toggle", "Flags", { window = "Visuals", tab = "Labels", section = "Text", order = 120, default = pathGet(DESCRIPTOR_DEFAULTS, "flags.on") }),
+    desc("bones.on", "toggle", "Bones", { window = "Visuals", tab = "Extras", section = "ESP", order = 130, default = pathGet(DESCRIPTOR_DEFAULTS, "bones.on") }),
+    desc("tracer.on", "toggle", "Tracer", { window = "Visuals", tab = "Extras", section = "ESP", order = 140, default = pathGet(DESCRIPTOR_DEFAULTS, "tracer.on") }),
+    desc("tracer.from", "dropdown", "Tracer From", { window = "Visuals", tab = "Extras", section = "ESP", order = 150, items = { "bottom", "center", "top", "mouse" }, default = pathGet(DESCRIPTOR_DEFAULTS, "tracer.from") }),
+    desc("tracer.col", "color", "Tracer Color", { window = "Visuals", tab = "Extras", section = "ESP", order = 160, default = pathGet(DESCRIPTOR_DEFAULTS, "tracer.col") }),
+
+    desc("radar.on", "toggle", "Radar", { window = "Radar", tab = "Radar", section = "Main", order = 10, default = pathGet(DESCRIPTOR_DEFAULTS, "radar.on") }),
+    desc("radar.x", "slider", "X", { window = "Radar", tab = "Radar", section = "Position", order = 20, min = 0, max = 600, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "radar.x") }),
+    desc("radar.y", "slider", "Y", { window = "Radar", tab = "Radar", section = "Position", order = 30, min = 0, max = 600, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "radar.y") }),
+    desc("radar.r", "slider", "Radius", { window = "Radar", tab = "Radar", section = "Position", order = 40, min = 40, max = 160, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "radar.r") }),
+    desc("radar.range", "slider", "Range", { window = "Radar", tab = "Radar", section = "Main", order = 50, min = 100, max = 2000, step = 10, default = pathGet(DESCRIPTOR_DEFAULTS, "radar.range") }),
+    desc("radar.rot", "toggle", "Rotate", { window = "Radar", tab = "Radar", section = "Main", order = 60, default = pathGet(DESCRIPTOR_DEFAULTS, "radar.rot") }),
+    desc("radar.names", "toggle", "Names", { window = "Radar", tab = "Radar", section = "Main", order = 70, default = pathGet(DESCRIPTOR_DEFAULTS, "radar.names") }),
+    desc("radar.allies", "toggle", "Show Allies", { window = "Radar", tab = "Radar", section = "Main", order = 80, default = pathGet(DESCRIPTOR_DEFAULTS, "radar.allies") }),
+
+    desc("list.on", "toggle", "List", { window = "Radar", tab = "List", section = "Main", order = 90, default = pathGet(DESCRIPTOR_DEFAULTS, "list.on") }),
+    desc("list.x", "slider", "X", { window = "Radar", tab = "List", section = "Position", order = 100, min = 0, max = 700, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "list.x") }),
+    desc("list.y", "slider", "Y", { window = "Radar", tab = "List", section = "Position", order = 110, min = 0, max = 700, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "list.y") }),
+    desc("list.w", "slider", "Width", { window = "Radar", tab = "List", section = "Position", order = 120, min = 160, max = 360, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "list.w") }),
+    desc("list.max", "slider", "Max Rows", { window = "Radar", tab = "List", section = "Main", order = 130, min = 4, max = 24, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "list.max") }),
+    desc("list.hp", "toggle", "Health", { window = "Radar", tab = "List", section = "Main", order = 140, default = pathGet(DESCRIPTOR_DEFAULTS, "list.hp") }),
+    desc("list.dist", "toggle", "Distance", { window = "Radar", tab = "List", section = "Main", order = 150, default = pathGet(DESCRIPTOR_DEFAULTS, "list.dist") }),
+
+    desc("team", "toggle", "Team Check", { window = "World", tab = "Checks", section = "Main", order = 10, default = pathGet(DESCRIPTOR_DEFAULTS, "team") }),
+    desc("vis.check", "toggle", "Visibility Check", { window = "World", tab = "Checks", section = "Main", order = 20, default = pathGet(DESCRIPTOR_DEFAULTS, "vis.check") }),
+    desc("vis.hide", "toggle", "Hide Hidden", { window = "World", tab = "Checks", section = "Main", order = 30, default = pathGet(DESCRIPTOR_DEFAULTS, "vis.hide") }),
+    desc("vis.tint", "toggle", "Tint Visibility", { window = "World", tab = "Checks", section = "Main", order = 40, default = pathGet(DESCRIPTOR_DEFAULTS, "vis.tint") }),
+    desc("vis.points", "slider", "Vis Points", { window = "World", tab = "Checks", section = "Main", order = 50, min = 1, max = 5, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "vis.points") }),
+    desc("world.on", "toggle", "World Overrides", { window = "World", tab = "World", section = "Main", order = 60, default = pathGet(DESCRIPTOR_DEFAULTS, "world.on") }),
+    desc("world.full", "toggle", "Fullbright", { window = "World", tab = "World", section = "Lighting", order = 70, default = pathGet(DESCRIPTOR_DEFAULTS, "world.full") }),
+    desc("world.noFog", "toggle", "No Fog", { window = "World", tab = "World", section = "Lighting", order = 80, default = pathGet(DESCRIPTOR_DEFAULTS, "world.noFog") }),
+    desc("world.fov", "slider", "FOV", { window = "World", tab = "World", section = "View", order = 90, min = 40, max = 120, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "world.fov") }),
+    desc("world.bright", "slider", "Brightness", { window = "World", tab = "World", section = "Lighting", order = 100, min = 0, max = 5, step = 0.1, decimals = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "world.bright") }),
+
+    desc("self.wm.on", "toggle", "Watermark", { window = "Self", tab = "HUD", section = "Main", order = 10, default = pathGet(DESCRIPTOR_DEFAULTS, "self.wm.on") }),
+    desc("self.compass.on", "toggle", "Compass", { window = "Self", tab = "HUD", section = "Main", order = 20, default = pathGet(DESCRIPTOR_DEFAULTS, "self.compass.on") }),
+    desc("self.fov.on", "toggle", "Self FOV", { window = "Self", tab = "Crosshair", section = "FOV", order = 30, default = pathGet(DESCRIPTOR_DEFAULTS, "self.fov.on") }),
+    desc("self.fov.rad", "slider", "Self FOV Radius", { window = "Self", tab = "Crosshair", section = "FOV", order = 40, min = 20, max = 500, step = 1, default = pathGet(DESCRIPTOR_DEFAULTS, "self.fov.rad") }),
+    desc("self.cross.on", "toggle", "Crosshair", { window = "Self", tab = "Crosshair", section = "Crosshair", order = 50, default = pathGet(DESCRIPTOR_DEFAULTS, "self.cross.on") }),
+
+    desc("chams.on", "toggle", "Chams", { window = "Visuals", tab = "Chams", section = "Main", order = 170, default = pathGet(DESCRIPTOR_DEFAULTS, "chams.on") }),
+    desc("chams.mode", "dropdown", "Mode", { window = "Visuals", tab = "Chams", section = "Main", order = 180, items = { "highlight", "material" }, default = pathGet(DESCRIPTOR_DEFAULTS, "chams.mode") }),
+    desc("chams.depth", "dropdown", "Depth", { window = "Visuals", tab = "Chams", section = "Main", order = 190, items = { "top", "occluded" }, default = pathGet(DESCRIPTOR_DEFAULTS, "chams.depth") }),
+    desc("chams.team", "toggle", "Team Check", { window = "Visuals", tab = "Chams", section = "Main", order = 200, default = pathGet(DESCRIPTOR_DEFAULTS, "chams.team") }),
+    desc("chams.tint", "toggle", "Visibility Tint", { window = "Visuals", tab = "Chams", section = "Main", order = 210, default = pathGet(DESCRIPTOR_DEFAULTS, "chams.tint") }),
+
+    desc("rings.on", "toggle", "Enemy Rings", { window = "Visuals", tab = "Rings", section = "Main", order = 220, default = pathGet(DESCRIPTOR_DEFAULTS, "rings.on") }),
+    desc("rings.enemies", "toggle", "On Enemies", { window = "Visuals", tab = "Rings", section = "Main", order = 230, default = pathGet(DESCRIPTOR_DEFAULTS, "rings.enemies") }),
+}
+
+local DESCRIPTOR_INDEX = {}
+for i = 1, #DESCRIPTORS do
+    DESCRIPTOR_INDEX[DESCRIPTORS[i].path] = DESCRIPTORS[i]
+end
+
+local function descLookup(path)
+    path = tostring(path or "")
+    local d = DESCRIPTOR_INDEX[path]
+    if d then return d end
+    local _, rest = path:match("^([^.]+)%.(.+)$")
+    if rest then
+        return DESCRIPTOR_INDEX[rest]
+    end
+end
+
 local Pool = {}
 Pool.__index = Pool
 
@@ -1077,6 +1200,7 @@ function ESP.new(opt)
     self._buf = {}
     self._dragRects = {}
     self._drag = nil
+    self._casAction = "EasyESP_M3_" .. tostring(floor(os.clock() * 1000000))
     self._proj = function(pos)
         if not cam then
             return 0, 0, -1, false
@@ -1109,6 +1233,24 @@ function ESP:_dragHit(pos)
 end
 
 function ESP:_dragHooks()
+    pcall(function()
+        local sink = function(_, state)
+            if state ~= Enum.UserInputState.Begin or not self.cfg.on then
+                return Enum.ContextActionResult.Pass
+            end
+            local pos = Input:GetMouseLocation()
+            if self._drag or self:_dragHit(pos) then
+                return Enum.ContextActionResult.Sink
+            end
+            return Enum.ContextActionResult.Pass
+        end
+        if CAS.BindActionAtPriority then
+            CAS:BindActionAtPriority(self._casAction, sink, false, Enum.ContextActionPriority.High.Value + 50, Enum.UserInputType.MouseButton3)
+        else
+            CAS:BindAction(self._casAction, sink, false, Enum.UserInputType.MouseButton3)
+        end
+    end)
+
     insert(self.con, Input.InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.UserInputType ~= Enum.UserInputType.MouseButton3 then return end
@@ -2510,6 +2652,7 @@ end
 
 function ESP:stop()
     self.running = false
+    self._drag = nil
     if self.loop then
         self.loop:Disconnect()
         self.loop = nil
@@ -2531,6 +2674,9 @@ function ESP:destroy()
             link:detach()
         end)
     end
+    pcall(function()
+        CAS:UnbindAction(self._casAction)
+    end)
     self:stop()
     self:clearBinds()
     if Runtime.esp == self then
@@ -2731,6 +2877,75 @@ function ESP:presets()
     end
     sort(out)
     return out
+end
+
+function ESP.GetDescriptors(prefix)
+    local out = deep(DESCRIPTORS)
+    if prefix and prefix ~= "" then
+        for i = 1, #out do
+            out[i].path = tostring(prefix) .. "." .. out[i].path
+        end
+    end
+    return out
+end
+
+function ESP.GetDescriptorDefaults(prefix)
+    local out = {}
+    for i = 1, #DESCRIPTORS do
+        local d = DESCRIPTORS[i]
+        local key = prefix and prefix ~= "" and (tostring(prefix) .. "." .. d.path) or d.path
+        out[key] = deep(d.default)
+    end
+    return out
+end
+
+function ESP.GetDescriptor(path)
+    local d = descLookup(path)
+    return d and deep(d) or nil
+end
+
+function ESP.Validate(path, value)
+    local d = descLookup(path)
+    if not d then return value end
+    if d.kind == "toggle" then
+        return value and true or false
+    elseif d.kind == "slider" or d.kind == "number" then
+        local n = tonumber(value) or d.default or 0
+        if d.min ~= nil then n = max(d.min, n) end
+        if d.max ~= nil then n = min(d.max, n) end
+        if d.step and d.step > 0 then
+            local base = d.min or 0
+            n = floor((n - base) / d.step + 0.5) * d.step + base
+        end
+        return n
+    elseif d.kind == "dropdown" or d.kind == "mode" then
+        local s = tostring(value)
+        for _, item in ipairs(d.items or {}) do
+            if tostring(item) == s then return s end
+        end
+        return d.default
+    elseif d.kind == "color" then
+        return col(value, d.default)
+    elseif d.kind == "keybind" then
+        return typeof(value) == "EnumItem" and value or d.default
+    end
+    return value
+end
+
+function ESP:GetDescriptors(prefix)
+    return ESP.GetDescriptors(prefix)
+end
+
+function ESP:GetDescriptorDefaults(prefix)
+    return ESP.GetDescriptorDefaults(prefix)
+end
+
+function ESP:GetDescriptor(path)
+    return ESP.GetDescriptor(path)
+end
+
+function ESP:Validate(path, value)
+    return ESP.Validate(path, value)
 end
 
 function ESP:flag(name, fn)
@@ -3305,6 +3520,7 @@ function ESP:sees(char, points)
     return self:_canSee(char, points or self.cfg.vis.points)
 end
 
+ESP.Descriptors = DESCRIPTORS
 ESP.addFlag = ESP.flag
 ESP.removeFlag = ESP.dropFlag
 ESP.onDraw = ESP.hook
@@ -3333,6 +3549,7 @@ Toolkit.themes = THEMES
 Toolkit.profiles = PROFILES
 Toolkit.packs = PACKS
 Toolkit.presets = PRESETS
+Toolkit.descriptors = DESCRIPTORS
 
 function Toolkit.clone(x)
     return deep(x)
@@ -3433,6 +3650,22 @@ end
 
 function Toolkit.applyPreset(esp, name)
     return esp:preset(name)
+end
+
+function Toolkit.getDescriptors(prefix)
+    return ESP.GetDescriptors(prefix)
+end
+
+function Toolkit.getDescriptorDefaults(prefix)
+    return ESP.GetDescriptorDefaults(prefix)
+end
+
+function Toolkit.getDescriptor(path)
+    return ESP.GetDescriptor(path)
+end
+
+function Toolkit.validate(path, value)
+    return ESP.Validate(path, value)
 end
 
 function Toolkit.quick(opt)
