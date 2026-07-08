@@ -1,4 +1,10 @@
 EasyESP UI Bridge
+Loadstring
+
+Lua
+
+local EasyESP_UI_Bridge = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/Bridge"))()
+
 What it is
 
 EasyESP_UI_Bridge is the optional pairing layer between EasyESP and EasyUi.
@@ -12,14 +18,13 @@ Its job is to:
     build a default UI from descriptors when possible
     expose one link object for sync/apply/save/load/detach
 
-If you want EasyESP and EasyUi to stay separate, do not use the bridge.
 Quick start
 
 Lua
 
-local EasyUi = require(path.To.EasyUi)
-local EasyESP = require(path.To.EasyESP)
-local Bridge = require(path.To.EasyESP_UI_Bridge)
+local EasyUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/ui"))()
+local EasyESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/esp"))()
+local EasyESP_UI_Bridge = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/Bridge"))()
 
 local ui = EasyUi.new({
     Title = "Example",
@@ -30,19 +35,19 @@ local esp = EasyESP.new()
 esp:on(true)
 esp:start()
 
-local link = Bridge.Attach(ui, esp)
+local link = EasyESP_UI_Bridge.Attach(ui, esp)
 
 What Attach does
 
 Lua
 
-local link = Bridge.Attach(ui, esp, opt)
+local link = EasyESP_UI_Bridge.Attach(ui, esp, opt)
 
 It:
 
     detaches any older bridge first
     mounts esp.cfg into the UI under a prefix
-    seeds bridge helper values like theme/profile/preset/name
+    seeds bridge helper values
     builds windows from descriptors when available
     falls back to the old manual schema if needed
     returns a link object
@@ -90,11 +95,39 @@ Bridge helper paths:
     bridge.preset
     bridge.cfgName
 
+Descriptor helpers
+Bridge-only descriptors
+
+Lua
+
+local list = EasyESP_UI_Bridge.Descriptors("esp")
+
+These cover bridge-specific UI items like:
+
+    theme
+    accent
+    profile
+    pack
+    preset
+    config name
+    apply/save/load buttons
+
+Merged descriptors
+
+Lua
+
+local merged = EasyESP_UI_Bridge.GetDescriptors("esp", esp)
+
+This combines:
+
+    EasyESP descriptors
+    bridge descriptors
+
 Custom prefix
 
 Lua
 
-Bridge.Attach(ui, esp, {
+EasyESP_UI_Bridge.Attach(ui, esp, {
     prefix = "mainesp",
 })
 
@@ -104,35 +137,7 @@ Then paths become:
     mainesp.target.fov
     mainesp.radar.on
 
-Descriptor-first bridge flow
-ESP descriptors
-
-If EasyESP exposes descriptors, the bridge prefers those.
-Bridge descriptors
-
-The bridge also injects bridge-only descriptors for things like:
-
-    theme
-    accent
-    profile
-    pack
-    preset
-    config name
-    save/load/apply buttons
-
-You can fetch the bridge-only descriptors:
-
-Lua
-
-local list = Bridge.Descriptors("esp")
-
-You can fetch the merged descriptor list:
-
-Lua
-
-local merged = Bridge.GetDescriptors("esp", esp)
-
-Default descriptor-driven build
+Descriptor-driven build
 
 When available, the bridge now prefers:
 
@@ -140,20 +145,20 @@ Lua
 
 ui:BuildFromDescriptors(descs, opt)
 
-That means the default bridge is already moving away from one giant hardcoded schema table.
+That means the pairing flow is now moving toward a descriptor-first architecture.
 Schema fallback
 
-The bridge still keeps the older schema fallback path for compatibility:
+The bridge still keeps the older schema fallback path:
 
 Lua
 
-local schema = Bridge.Schema("esp")
+local schema = EasyESP_UI_Bridge.Schema("esp")
 
 You can still force a custom schema:
 
 Lua
 
-Bridge.Attach(ui, esp, {
+EasyESP_UI_Bridge.Attach(ui, esp, {
     prefix = "esp",
     schema = {
         {
@@ -172,7 +177,7 @@ Window order and width
 
 When building from descriptors, the bridge applies default window ordering and widths.
 
-Default window order:
+Default order:
 
     Combat
     Visuals
@@ -181,11 +186,11 @@ Default window order:
     Self
     Config
 
-You can override it:
+Override it:
 
 Lua
 
-Bridge.Attach(ui, esp, {
+EasyESP_UI_Bridge.Attach(ui, esp, {
     windowOrder = {
         Combat = 1,
         Config = 2,
@@ -204,7 +209,7 @@ If you want bridge.theme and bridge.accent changes to apply automatically:
 
 Lua
 
-Bridge.Attach(ui, esp, {
+EasyESP_UI_Bridge.Attach(ui, esp, {
     liveTheme = true,
 })
 
@@ -215,7 +220,6 @@ Lua
 
 link:sync()
 
-Refreshes bridge-bound widgets from the mounted ESP config.
 Apply theme
 
 Lua
@@ -256,7 +260,6 @@ Saves:
     ui:SaveConfig(name)
     esp:save(name)
 
-If no name is provided, it uses bridge.cfgName.
 Load pair
 
 Lua
@@ -280,63 +283,47 @@ Detach directly
 
 Lua
 
-Bridge.Detach(ui)
+EasyESP_UI_Bridge.Detach(ui)
 
-Use this if you want to remove the bridge without destroying the UI or ESP themselves.
-Bridge toolkit
+Toolkit
 
 Lua
 
-local Bridge = require(path.To.EasyESP_UI_Bridge)
-local tk = Bridge.Toolkit
+local Toolkit = EasyESP_UI_Bridge.Toolkit
 
-Helpers
+Helpers:
 
-    tk.Schema(prefix)
-    tk.Descriptors(prefix)
-    tk.GetDescriptors(prefix, esp)
-    tk.Attach(ui, esp, opt)
-    tk.Detach(ui)
-    tk.ApplyTheme(link)
-    tk.ApplySetup(link)
-    tk.Save(link, name)
-    tk.Load(link, name)
-    tk.Pair(UIMod, ESPMod, uiOpt, espOpt, bridgeOpt)
+    Toolkit.Schema(prefix)
+    Toolkit.Descriptors(prefix)
+    Toolkit.GetDescriptors(prefix, esp)
+    Toolkit.Attach(ui, esp, opt)
+    Toolkit.Detach(ui)
+    Toolkit.ApplyTheme(link)
+    Toolkit.ApplySetup(link)
+    Toolkit.Save(link, name)
+    Toolkit.Load(link, name)
+    Toolkit.Pair(UIMod, ESPMod, uiOpt, espOpt, bridgeOpt)
 
 Quick pair helper
 
 Lua
 
-local EasyUi = require(path.To.EasyUi)
-local EasyESP = require(path.To.EasyESP)
-local Bridge = require(path.To.EasyESP_UI_Bridge)
+local EasyUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/ui"))()
+local EasyESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/esp"))()
+local EasyESP_UI_Bridge = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/Bridge"))()
 
-local ui, esp, link = Bridge.Toolkit.Pair(EasyUi, EasyESP,
+local ui, esp, link = EasyESP_UI_Bridge.Toolkit.Pair(EasyUi, EasyESP,
     { Title = "Stack", Theme = "pastel" },
     { on = true },
     { prefix = "esp" }
 )
 
-By default Pair:
-
-    creates the UI
-    creates the ESP
-    enables the ESP unless espOpt.on == false
-    starts the ESP unless bridgeOpt.start == false
-    attaches the bridge
-
 Setup summary
 
-The bridge now has two clear roles:
-Fast pairing layer
+Use the bridge when you want:
 
-Use it when you want EasyUi and EasyESP working together quickly.
-Descriptor merge layer
+    EasyESP + EasyUi wired together quickly
+    descriptor-driven bridge generation
+    theme/profile/preset/save/load glue without writing it yourself
 
-Use it when you want to consume:
-
-    ESP descriptors
-    bridge descriptors
-    descriptor-driven UI generation
-
-That means it stays useful without forcing either system to depend on the other.
+Skip it when you want either system completely standalone.
