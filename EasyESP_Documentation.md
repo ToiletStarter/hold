@@ -1,4 +1,10 @@
 EasyESP
+Loadstring
+
+Lua
+
+local EasyESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/esp"))()
+
 What it is
 
 EasyESP is a standalone Drawing-based ESP system built mainly around Potassium’s Drawing APIs.
@@ -20,57 +26,16 @@ Main features:
     JSON config save/load
     descriptor layer
     toolkit helpers
-    singleton protection so a new ESP replaces the old one
 
 Quick start
 
 Lua
 
-local EasyESP = require(path.To.EasyESP)
+local EasyESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/esp"))()
 
 local esp = EasyESP.new()
 esp:on(true)
 esp:start()
-
-Stop:
-
-Lua
-
-esp:stop()
-
-Destroy:
-
-Lua
-
-esp:destroy()
-
-Constructor
-
-Lua
-
-local esp = EasyESP.new(options)
-
-Example:
-
-Lua
-
-local esp = EasyESP.new({
-    on = true,
-    team = true,
-    vis = {
-        check = true,
-        tint = true,
-    },
-    box = {
-        on = true,
-        kind = "corner",
-        mode = "hp",
-    },
-    target = {
-        on = true,
-        showFov = true,
-    },
-})
 
 Core control
 
@@ -91,150 +56,66 @@ Lua
 EasyESP.DestroyAll()
 
 Themes / profiles / packs / presets
-Theme
 
 Lua
 
 esp:theme("pastel")
 esp:applyTheme("carbon")
-print(table.concat(esp:themes(), ", "))
-
-Performance profile
-
-Lua
 
 esp:profile("balanced")
 esp:applyPerformance("high")
-print(table.concat(esp:performanceProfiles(), ", "))
-
-Feature pack
-
-Lua
 
 esp:pack("comp")
 esp:applyFeaturePack("world")
-print(table.concat(esp:featurePacks(), ", "))
-
-Preset
-
-Lua
 
 esp:preset("legit")
 esp:applyPreset("full")
-print(table.concat(esp:presets(), ", "))
+
+Available names:
+
+Lua
+
+esp:themes()
+esp:performanceProfiles()
+esp:featurePacks()
+esp:presets()
 
 Config layout
 
 Everything lives in esp.cfg.
-Main fields
 
-Lua
+Common groups:
 
-esp.cfg.on = true
-esp.cfg.maxRange = 3000
-esp.cfg.espRange = 3000
-esp.cfg.team = true
-esp.cfg.rainbow = false
-esp.cfg.rainbowRate = 1
+    vis
+    box
+    target
+    arrow
+    radar
+    list
+    self
+    world
+    chams
+    rings
 
-Visibility
-
-Lua
-
-esp.cfg.vis.check = true
-esp.cfg.vis.hide = false
-esp.cfg.vis.tint = true
-esp.cfg.vis.points = 3
-
-Box
+Examples:
 
 Lua
 
 esp.cfg.box.on = true
-esp.cfg.box.kind = "corner" -- corner / box / 3d / 3dcorner
-esp.cfg.box.mode = "hp"     -- static / team / hp / dist
-esp.cfg.box.w = 1
-esp.cfg.box.fill = false
-esp.cfg.box.col = Color3.fromRGB(202, 164, 255)
-
-Labels and extras
-
-Lua
-
-esp.cfg.name.on = true
-esp.cfg.hp.on = true
-esp.cfg.dist.on = true
-esp.cfg.flags.on = false
-esp.cfg.bones.on = false
-esp.cfg.head.on = false
-esp.cfg.gaze.on = false
-esp.cfg.tracer.on = false
-
-Arrow
-
-Lua
-
-esp.cfg.arrow.on = true
-esp.cfg.arrow.rad = 190
-esp.cfg.arrow.size = 14
-esp.cfg.arrow.fill = true
-esp.cfg.arrow.outline = true
-esp.cfg.arrow.dist = true
-
-Radar
-
-Lua
-
-esp.cfg.radar.on = true
-esp.cfg.radar.x = 18
-esp.cfg.radar.y = 170
-esp.cfg.radar.r = 74
-esp.cfg.radar.range = 500
-esp.cfg.radar.rot = true
-
-Target
-
-Lua
+esp.cfg.box.kind = "corner"
+esp.cfg.box.mode = "hp"
 
 esp.cfg.target.on = true
 esp.cfg.target.fov = 240
 esp.cfg.target.showFov = true
-esp.cfg.target.visOnly = false
-esp.cfg.target.brackets = true
-esp.cfg.target.line = false
 
-List
-
-Lua
-
+esp.cfg.radar.on = true
 esp.cfg.list.on = true
-esp.cfg.list.x = 18
-esp.cfg.list.y = 350
-esp.cfg.list.w = 220
-esp.cfg.list.max = 10
-
-World
-
-Lua
-
-esp.cfg.world.on = true
-esp.cfg.world.full = true
-esp.cfg.world.noFog = true
-esp.cfg.world.fov = 80
-esp.cfg.world.bright = 2
-
-Self visuals
-
-Lua
-
 esp.cfg.self.wm.on = true
-esp.cfg.self.compass.on = true
-esp.cfg.self.fov.on = true
-esp.cfg.self.cross.on = true
 
 Descriptor layer
 
-This is the new source of truth for many UI-facing settings.
+EasyESP now exposes descriptor metadata for a large part of the settings surface.
 Static access
 
 Lua
@@ -272,7 +153,7 @@ Lua
     default = 240,
 }
 
-This layer is what the new bridge/UI build path uses.
+This is what the bridge can now consume for descriptor-driven UI generation.
 Friends
 
 Lua
@@ -282,7 +163,6 @@ esp:markFriend(player)
 esp:unfriend(player)
 esp:unmarkFriend(player)
 esp:clearFriends()
-
 print(esp:isFriend(player))
 
 Rings
@@ -302,7 +182,7 @@ esp:addRingSpec({
     ticks = 8,
 })
 
-World / attached ring
+World ring
 
 Lua
 
@@ -313,9 +193,6 @@ esp:addRing("drop", {
     glow = true,
     y = 0.1,
 })
-
-esp:dropRing("drop")
-esp:clearRings()
 
 Entities
 Custom entity
@@ -336,30 +213,14 @@ esp:addEnt("generator", {
     max = 1200,
 })
 
-Alias:
+Aliases:
 
 Lua
 
 esp:addEntity("generator", spec)
-
-Direct instance entity
-
-Lua
-
-esp:addInst("loot_1", workspace.LootCrate, {
-    label = "Loot",
-    col = Color3.fromRGB(120, 255, 190),
-    dot = true,
-    dist = true,
-})
-
-Alias:
-
-Lua
-
 esp:addInstanceEntity("loot_1", workspace.LootCrate, opt)
 
-Remove / clear
+Remove/clear:
 
 Lua
 
@@ -379,17 +240,9 @@ esp:scan(workspace, {
     col = Color3.fromRGB(120, 255, 190),
 })
 
-esp:scanNPCs({
-    col = Color3.fromRGB(255, 135, 135),
-})
-
-esp:scanTools({
-    col = Color3.fromRGB(255, 220, 110),
-})
-
-esp:scanPickups({
-    names = { "ammo", "cash", "armor", "med" },
-})
+esp:scanNPCs({ col = Color3.fromRGB(255, 135, 135) })
+esp:scanTools({ col = Color3.fromRGB(255, 220, 110) })
+esp:scanPickups({ names = { "ammo", "cash", "armor", "med" } })
 
 Hooks and modules
 Hook
@@ -456,16 +309,11 @@ end)
 esp:clearBinds()
 
 Config export / import
-JSON
 
 Lua
 
 local json = esp:export()
 esp:import(json)
-
-File save / load
-
-Lua
 
 esp:save("legit")
 esp:load("legit")
@@ -479,70 +327,40 @@ Middle click drag is supported for:
     player list
     ESP watermark
 
-That makes it easier to place the main on-screen ESP panels without needing the UI bridge.
 Toolkit
 
 Lua
 
 local Toolkit = EasyESP.Toolkit
 
-Helpers
+Helpers:
 
-    Toolkit.clone(tbl)
-    Toolkit.merge(a, b)
-    Toolkit.fill(a, b)
-    Toolkit.color(r, g, b)
-    Toolkit.hsv(h, s, v)
-    Toolkit.ring(spec)
-    Toolkit.flag(text, color)
-    Toolkit.pathGet(tbl, path)
-    Toolkit.pathSet(tbl, path, value)
-    Toolkit.pathToggle(tbl, path)
-    Toolkit.findPlayer(query)
-    Toolkit.scan(root, predicate, limit)
-    Toolkit.applyTheme(esp, name)
-    Toolkit.applyProfile(esp, name)
-    Toolkit.applyPack(esp, name)
-    Toolkit.applyPreset(esp, name)
-    Toolkit.getDescriptors(prefix?)
-    Toolkit.getDescriptorDefaults(prefix?)
-    Toolkit.getDescriptor(path)
-    Toolkit.validate(path, value)
-    Toolkit.quick(opt) / Toolkit.quickESP(opt)
+    Toolkit.clone
+    Toolkit.merge
+    Toolkit.fill
+    Toolkit.color
+    Toolkit.hsv
+    Toolkit.ring
+    Toolkit.flag
+    Toolkit.pathGet
+    Toolkit.pathSet
+    Toolkit.pathToggle
+    Toolkit.findPlayer
+    Toolkit.scan
+    Toolkit.applyTheme
+    Toolkit.applyProfile
+    Toolkit.applyPack
+    Toolkit.applyPreset
+    Toolkit.getDescriptors
+    Toolkit.getDescriptorDefaults
+    Toolkit.getDescriptor
+    Toolkit.validate
+    Toolkit.quick / Toolkit.quickESP
 
 Setup summary
 
-EasyESP is streamlined around three things:
-Fast startup
+EasyESP is streamlined around:
 
-Use:
-
-    new()
-    on(true)
-    start()
-
-Clean config grouping
-
-Most settings live in sensible clusters:
-
-    vis
-    box
-    target
-    radar
-    list
-    self
-    world
-    chams
-
-Scalable extension
-
-Use:
-
-    hooks
-    modules
-    entities
-    rings
-    descriptors
-    toolkit helpers
-
-That keeps the base flow simple while still letting you scale the system cleanly.
+    fast startup
+    clean config grouping
+    scalable extension through hooks/modules/entities/rings/descriptors
