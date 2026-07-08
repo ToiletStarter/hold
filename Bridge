@@ -9,6 +9,34 @@ local function clean(prefix)
     return tostring(prefix or "esp")
 end
 
+function Bridge.Descriptors(prefix)
+    prefix = clean(prefix)
+    return {
+        { path = "bridge.theme", kind = "dropdown", label = "Theme", window = "Config", tab = "Theme", section = "Theme", order = 10, items = { "pastel", "carbon", "rose", "mint", "mono" }, default = "pastel", bindable = true, resettable = true },
+        { path = "bridge.accent", kind = "color", label = "Accent", window = "Config", tab = "Theme", section = "Theme", order = 20, default = nil, bindable = false, resettable = false },
+        { path = "bridge.profile", kind = "dropdown", label = "Profile", window = "Config", tab = "Setup", section = "Profiles", order = 30, items = { "low", "balanced", "high" }, default = "balanced", bindable = true, resettable = true },
+        { path = "bridge.pack", kind = "dropdown", label = "Pack", window = "Config", tab = "Setup", section = "Profiles", order = 40, items = { "clean", "comp", "world" }, default = "clean", bindable = true, resettable = true },
+        { path = "bridge.preset", kind = "dropdown", label = "Preset", window = "Config", tab = "Setup", section = "Profiles", order = 50, items = { "lite", "legit", "world", "full" }, default = "legit", bindable = true, resettable = true },
+        { path = "bridge.cfgName", kind = "box", label = "Name", window = "Config", tab = "Files", section = "Files", order = 60, default = "default", placeholder = "config name", bindable = false, resettable = true },
+        { kind = "button", id = "ui_apply", text = "Apply Theme", window = "Config", tab = "Theme", section = "Theme", order = 70, onPress = function(w)
+            local link = w.ui._espBridge
+            if link and link.applyTheme then link:applyTheme() end
+        end },
+        { kind = "button", id = "esp_apply_profile", text = "Apply ESP Setup", window = "Config", tab = "Setup", section = "Profiles", order = 80, onPress = function(w)
+            local link = w.ui._espBridge
+            if link and link.applySetup then link:applySetup() end
+        end },
+        { kind = "button", id = "cfg_save", text = "Save Pair", window = "Config", tab = "Files", section = "Files", order = 90, onPress = function(w)
+            local link = w.ui._espBridge
+            if link and link.save then link:save() end
+        end },
+        { kind = "button", id = "cfg_load", text = "Load Pair", window = "Config", tab = "Files", section = "Files", order = 100, onPress = function(w)
+            local link = w.ui._espBridge
+            if link and link.load then link:load() end
+        end },
+    }
+end
+
 function Bridge.Schema(prefix)
     prefix = clean(prefix)
     local p = prefix
@@ -267,7 +295,36 @@ function Bridge.Attach(ui, esp, opt)
     ui:Set("bridge.preset", opt.preset or "legit")
     ui:Set("bridge.cfgName", opt.cfgName or "default")
 
-    local wins = ui:Build(opt.schema or Bridge.Schema(prefix))
+    local wins
+    if opt.schema then
+        wins = ui:Build(opt.schema)
+    elseif ui.BuildFromDescriptors and esp.GetDescriptors then
+        local descs = esp:GetDescriptors(prefix)
+        local extra = Bridge.Descriptors(prefix)
+        for i = 1, #extra do descs[#descs + 1] = extra[i] end
+        wins = ui:BuildFromDescriptors(descs, {
+            Width = opt.Width or 280,
+            windowOrder = opt.windowOrder or {
+                Combat = 1,
+                Visuals = 2,
+                Radar = 3,
+                World = 4,
+                Self = 5,
+                Config = 6,
+            },
+            windowWidth = opt.windowWidth or {
+                Combat = 300,
+                Visuals = 300,
+                Radar = 280,
+                World = 280,
+                Self = 260,
+                Config = 260,
+            },
+        })
+    else
+        wins = ui:Build(Bridge.Schema(prefix))
+    end
+
     local link = bridgeMethods({
         ui = ui,
         esp = esp,
@@ -289,6 +346,17 @@ function Bridge.Attach(ui, esp, opt)
     Runtime.bridge = link
     link:sync()
     return link
+end
+
+function Bridge.GetDescriptors(prefix, esp)
+    local list = {}
+    if esp and esp.GetDescriptors then
+        local src = esp:GetDescriptors(prefix)
+        for i = 1, #src do list[#list + 1] = src[i] end
+    end
+    local extra = Bridge.Descriptors(prefix)
+    for i = 1, #extra do list[#list + 1] = extra[i] end
+    return list
 end
 
 function Bridge.ApplyTheme(link)
@@ -317,6 +385,8 @@ end
 
 Bridge.Toolkit = {
     Schema = function(prefix) return Bridge.Schema(prefix) end,
+    Descriptors = function(prefix) return Bridge.Descriptors(prefix) end,
+    GetDescriptors = function(prefix, esp) return Bridge.GetDescriptors(prefix, esp) end,
     Attach = function(ui, esp, opt) return Bridge.Attach(ui, esp, opt) end,
     Detach = function(ui) return Bridge.Detach(ui) end,
     ApplyTheme = function(link) return Bridge.ApplyTheme(link) end,
