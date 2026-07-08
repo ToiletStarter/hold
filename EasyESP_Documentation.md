@@ -1,7 +1,7 @@
 EasyESP
-Overview
+What it is
 
-EasyESP is a standalone Drawing-based ESP system built primarily around Potassium’s Drawing API.
+EasyESP is a standalone Drawing-based ESP system built mainly around Potassium’s Drawing APIs.
 
 It does not require EasyUi or the bridge.
 
@@ -18,6 +18,7 @@ Main features:
     chams
     world overrides
     JSON config save/load
+    descriptor layer
     toolkit helpers
     singleton protection so a new ESP replaces the old one
 
@@ -154,9 +155,9 @@ esp.cfg.box.kind = "corner" -- corner / box / 3d / 3dcorner
 esp.cfg.box.mode = "hp"     -- static / team / hp / dist
 esp.cfg.box.w = 1
 esp.cfg.box.fill = false
-esp.cfg.box.col = Color3.fromRGB(192, 154, 255)
+esp.cfg.box.col = Color3.fromRGB(202, 164, 255)
 
-Name / HP / distance / tracer
+Labels and extras
 
 Lua
 
@@ -231,6 +232,47 @@ esp.cfg.self.compass.on = true
 esp.cfg.self.fov.on = true
 esp.cfg.self.cross.on = true
 
+Descriptor layer
+
+This is the new source of truth for many UI-facing settings.
+Static access
+
+Lua
+
+local descs = EasyESP.GetDescriptors()
+local defaults = EasyESP.GetDescriptorDefaults()
+local one = EasyESP.GetDescriptor("target.fov")
+local value = EasyESP.Validate("target.fov", 999)
+
+Instance access
+
+Lua
+
+local descs = esp:GetDescriptors()
+local defaults = esp:GetDescriptorDefaults()
+local one = esp:GetDescriptor("target.fov")
+local value = esp:Validate("target.fov", 999)
+
+Descriptor example
+
+Lua
+
+{
+    path = "target.fov",
+    kind = "slider",
+    label = "FOV",
+    window = "Combat",
+    tab = "Target",
+    subtab = "Selector",
+    section = "Main",
+    order = 20,
+    min = 20,
+    max = 500,
+    step = 1,
+    default = 240,
+}
+
+This layer is what the new bridge/UI build path uses.
 Friends
 
 Lua
@@ -253,7 +295,7 @@ esp.cfg.rings.enemies = true
 
 esp:addRingSpec({
     rad = 12,
-    col = Color3.fromRGB(192, 154, 255),
+    col = Color3.fromRGB(202, 164, 255),
     w = 1,
     glow = true,
     pulse = true,
@@ -462,34 +504,26 @@ Helpers
     Toolkit.applyProfile(esp, name)
     Toolkit.applyPack(esp, name)
     Toolkit.applyPreset(esp, name)
+    Toolkit.getDescriptors(prefix?)
+    Toolkit.getDescriptorDefaults(prefix?)
+    Toolkit.getDescriptor(path)
+    Toolkit.validate(path, value)
     Toolkit.quick(opt) / Toolkit.quickESP(opt)
 
-Example
+Setup summary
 
-Lua
+EasyESP is streamlined around three things:
+Fast startup
 
-local EasyESP = require(path.To.EasyESP)
-local tk = EasyESP.Toolkit
-
-local esp = tk.quickESP({
-    preset = "legit",
-    on = true,
-})
-
-Setup philosophy
-
-EasyESP is streamlined around three ideas:
-1. Short startup
-
-You can get running with:
+Use:
 
     new()
     on(true)
     start()
 
-2. Predictable config groups
+Clean config grouping
 
-Settings are grouped by:
+Most settings live in sensible clusters:
 
     vis
     box
@@ -500,14 +534,15 @@ Settings are grouped by:
     world
     chams
 
-3. Extend only when needed
+Scalable extension
 
 Use:
 
     hooks
     modules
-    custom entities
+    entities
     rings
+    descriptors
     toolkit helpers
 
-That keeps the base setup simple while still leaving room for game-specific behavior.
+That keeps the base flow simple while still letting you scale the system cleanly.
