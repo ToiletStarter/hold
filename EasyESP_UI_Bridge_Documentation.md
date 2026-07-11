@@ -123,6 +123,7 @@ This combines:
     EasyESP descriptors
     bridge descriptors
 
+When ui:BuildFromDescriptors(...) exists, the bridge prefers this merged descriptor route instead of relying only on the older hand-written fallback schema.
 Custom prefix
 
 Lua
