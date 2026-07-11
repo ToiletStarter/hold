@@ -2338,57 +2338,64 @@ function ESP:_ents()
     end
     local eye = cam.CFrame.Position
     local vp = cam.ViewportSize
+
+    local function drawOne(id, e, obj)
+        local pos, size, pivot
+        local kind = typeof(obj)
+        if kind == "Vector3" then
+            pos = obj
+            size = e.size or v3(3, 4, 3)
+            pivot = cf(pos)
+        elseif kind == "Instance" then
+            if obj:IsA("BasePart") then
+                pos = obj.Position
+                size = obj.Size
+                pivot = obj.CFrame
+            elseif obj:IsA("Model") then
+                pivot, size = obj:GetBoundingBox()
+                pos = pivot.Position
+            end
+        end
+        if not (pos and size and pivot) then return end
+        local dist = (eye - pos).Magnitude
+        if dist > (e.max or self.cfg.maxRange) then return end
+        local _, _, d, on = self._proj(pos)
+        if not on or d <= 0 then return end
+        local lx, ly, bw, bh = box2d(pivot, size, self._proj)
+        if not lx then return end
+        if e.box then
+            self.pool:box("eb0" .. id, lx - 1, ly - 1, bw + 2, bh + 2, BLACK, false, 2, 1)
+            self.pool:box("eb1" .. id, lx, ly, bw, bh, e.col, false, 1, 1)
+        end
+        if e.dot then
+            self.pool:dot("ed" .. id, lx + bw * 0.5, ly + bh, 3, e.col, true, 1, 12)
+        end
+        if e.name and e.label then
+            self.pool:txt("en" .. id, e.label, lx + bw * 0.5, ly - 16, 12, e.col, true, FONT, true)
+        end
+        if e.dist then
+            self.pool:txt("em" .. id, tostring(floor(dist + 0.5)) .. "m", lx + bw * 0.5, ly + bh + 3, 10, e.col, true, FONT, true)
+        end
+        if e.tracer then
+            self.pool:line("et" .. id, vp.X * 0.5, vp.Y, lx + bw * 0.5, ly + bh, e.col, 1, 1)
+        end
+        if e.ring then
+            self:_ring("er" .. id, pos - v3(0, size.Y * 0.5, 0), e.ring, 0)
+        end
+        if e.draw then
+            pcall(e.draw, self, id, obj, pos, lx, ly, bw, bh, dist)
+        end
+    end
+
     for id, e in pairs(self.ents) do
         local obj = e.get()
         if obj then
-            local pos, size, pivot
-            local kind = typeof(obj)
-            if kind == "Vector3" then
-                pos = obj
-                size = e.size or v3(3, 4, 3)
-                pivot = cf(pos)
-            elseif kind == "Instance" then
-                if obj:IsA("BasePart") then
-                    pos = obj.Position
-                    size = obj.Size
-                    pivot = obj.CFrame
-                elseif obj:IsA("Model") then
-                    pivot, size = obj:GetBoundingBox()
-                    pos = pivot.Position
+            if typeof(obj) == "table" then
+                for i = 1, #obj do
+                    drawOne(id .. "_" .. i, e, obj[i])
                 end
-            end
-            if pos and size and pivot then
-                local dist = (eye - pos).Magnitude
-                if dist <= (e.max or self.cfg.maxRange) then
-                    local _, _, d, on = self._proj(pos)
-                    if on and d > 0 then
-                        local lx, ly, bw, bh = box2d(pivot, size, self._proj)
-                        if lx then
-                            if e.box then
-                                self.pool:box("eb0" .. id, lx - 1, ly - 1, bw + 2, bh + 2, BLACK, false, 2, 1)
-                                self.pool:box("eb1" .. id, lx, ly, bw, bh, e.col, false, 1, 1)
-                            end
-                            if e.dot then
-                                self.pool:dot("ed" .. id, lx + bw * 0.5, ly + bh, 3, e.col, true, 1, 12)
-                            end
-                            if e.name and e.label then
-                                self.pool:txt("en" .. id, e.label, lx + bw * 0.5, ly - 16, 12, e.col, true, FONT, true)
-                            end
-                            if e.dist then
-                                self.pool:txt("em" .. id, tostring(floor(dist + 0.5)) .. "m", lx + bw * 0.5, ly + bh + 3, 10, e.col, true, FONT, true)
-                            end
-                            if e.tracer then
-                                self.pool:line("et" .. id, vp.X * 0.5, vp.Y, lx + bw * 0.5, ly + bh, e.col, 1, 1)
-                            end
-                            if e.ring then
-                                self:_ring("er" .. id, pos - v3(0, size.Y * 0.5, 0), e.ring, 0)
-                            end
-                            if e.draw then
-                                pcall(e.draw, self, id, obj, pos, lx, ly, bw, bh, dist)
-                            end
-                        end
-                    end
-                end
+            else
+                drawOne(id, e, obj)
             end
         end
     end
@@ -2450,9 +2457,9 @@ function ESP:_cham(s)
             self:_clearCham(r)
             r.matKind = cfg.mat
         end
-        local map = r.mat or {}
+        local map = r.mat or setmetatable({}, { __mode = "k" })
         r.mat = map
-        for _, part in ipairs(s.char:GetChildren()) do
+        for _, part in ipairs(s.char:GetDescendants()) do
             if part:IsA("BasePart") and part.Transparency < 1 and part.Name ~= "HumanoidRootPart" and (part.Name ~= "Head" or cfg.matHead) then
                 if not map[part] then
                     map[part] = { part.Material, part.Color, part.Transparency }
@@ -2879,7 +2886,7 @@ function ESP:presets()
     return out
 end
 
-function ESP.GetDescriptors(prefix)
+local function getDescriptors(prefix)
     local out = deep(DESCRIPTORS)
     if prefix and prefix ~= "" then
         for i = 1, #out do
@@ -2889,7 +2896,7 @@ function ESP.GetDescriptors(prefix)
     return out
 end
 
-function ESP.GetDescriptorDefaults(prefix)
+local function getDescriptorDefaults(prefix)
     local out = {}
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
@@ -2899,12 +2906,12 @@ function ESP.GetDescriptorDefaults(prefix)
     return out
 end
 
-function ESP.GetDescriptor(path)
+local function getDescriptor(path)
     local d = descLookup(path)
     return d and deep(d) or nil
 end
 
-function ESP.Validate(path, value)
+local function validateDescriptor(path, value)
     local d = descLookup(path)
     if not d then return value end
     if d.kind == "toggle" then
@@ -2932,20 +2939,26 @@ function ESP.Validate(path, value)
     return value
 end
 
-function ESP:GetDescriptors(prefix)
-    return ESP.GetDescriptors(prefix)
+function ESP.GetDescriptors(selfOrPrefix, prefix)
+    local p = type(selfOrPrefix) == "table" and prefix or selfOrPrefix
+    return getDescriptors(p)
 end
 
-function ESP:GetDescriptorDefaults(prefix)
-    return ESP.GetDescriptorDefaults(prefix)
+function ESP.GetDescriptorDefaults(selfOrPrefix, prefix)
+    local p = type(selfOrPrefix) == "table" and prefix or selfOrPrefix
+    return getDescriptorDefaults(p)
 end
 
-function ESP:GetDescriptor(path)
-    return ESP.GetDescriptor(path)
+function ESP.GetDescriptor(selfOrPath, path)
+    local p = type(selfOrPath) == "table" and path or selfOrPath
+    return getDescriptor(p)
 end
 
-function ESP:Validate(path, value)
-    return ESP.Validate(path, value)
+function ESP.Validate(selfOrPath, path, value)
+    if type(selfOrPath) == "table" then
+        return validateDescriptor(path, value)
+    end
+    return validateDescriptor(selfOrPath, path)
 end
 
 function ESP:flag(name, fn)
@@ -3148,7 +3161,16 @@ end
 
 function ESP:addInst(id, inst, opt)
     opt = opt or {}
-    return self:addEnt(id, {
+    local key = id
+    if self.ents[key] and typeof(inst) == "Instance" and inst.GetDebugId then
+        local ok, gid = pcall(function() return inst:GetDebugId() end)
+        if ok and gid then
+            key = tostring(id) .. "_" .. tostring(gid)
+        else
+            key = tostring(id) .. "_" .. tostring(floor(os.clock() * 1000000))
+        end
+    end
+    return self:addEnt(key, {
         get = function()
             return inst and inst.Parent and inst or nil
         end,
