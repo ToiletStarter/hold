@@ -113,6 +113,7 @@ esp.cfg.radar.on = true
 esp.cfg.list.on = true
 esp.cfg.self.wm.on = true
 
+Material chams now walk character descendants instead of only direct children, so accessories and other nested character parts are much more likely to be included.
 Descriptor layer
 
 EasyESP now exposes descriptor metadata for a large part of the settings surface.
@@ -213,12 +214,31 @@ esp:addEnt("generator", {
     max = 1200,
 })
 
+Entity lists are supported
+
+get() can also return a table/array of objects.
+That makes it easier to track folders or batches of items without registering each one manually.
+
+Lua
+
+esp:addEnt("pickups", {
+    get = function()
+        return workspace.Pickups:GetChildren()
+    end,
+    label = "Pickup",
+    col = Color3.fromRGB(120, 255, 190),
+    box = true,
+    dist = true,
+})
+
 Aliases:
 
 Lua
 
 esp:addEntity("generator", spec)
 esp:addInstanceEntity("loot_1", workspace.LootCrate, opt)
+
+If the same id is reused for multiple instance registrations, EasyESP now tries to make the internal key unique instead of silently overwriting the older registration.
 
 Remove/clear:
 
