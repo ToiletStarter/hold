@@ -12,7 +12,7 @@ end
 function Bridge.Descriptors(prefix)
     prefix = clean(prefix)
     return {
-        { path = "bridge.theme", kind = "dropdown", label = "Theme", window = "Config", tab = "Theme", section = "Theme", order = 10, items = { "pastel", "carbon", "rose", "mint", "mono" }, default = "pastel", bindable = true, resettable = true },
+        { path = "bridge.theme", kind = "dropdown", label = "Theme", window = "Config", tab = "Theme", section = "Theme", order = 10, items = { "blush", "pastel", "carbon", "rose", "mint", "mono" }, default = "blush", bindable = true, resettable = true },
         { path = "bridge.accent", kind = "color", label = "Accent", window = "Config", tab = "Theme", section = "Theme", order = 20, default = nil, bindable = false, resettable = false },
         { path = "bridge.profile", kind = "dropdown", label = "Profile", window = "Config", tab = "Setup", section = "Profiles", order = 30, items = { "low", "balanced", "high" }, default = "balanced", bindable = true, resettable = true },
         { path = "bridge.pack", kind = "dropdown", label = "Pack", window = "Config", tab = "Setup", section = "Profiles", order = 40, items = { "clean", "comp", "world" }, default = "clean", bindable = true, resettable = true },
@@ -277,8 +277,45 @@ local function bridgeMethods(link)
     return link
 end
 
+local function layoutDescriptors(list, opt)
+    opt = opt or {}
+    if not opt.singleWindow then
+        return list
+    end
+    local main = opt.windowTitle or "Control"
+    local tabMap = opt.tabMap or {
+        Combat = "Aiming",
+        Visuals = "Visuals",
+        Radar = "Output",
+        World = "Options",
+        Self = "Misc",
+        Config = "Options",
+    }
+    local out = {}
+    for i = 1, #list do
+        local d = {}
+        for k, v in pairs(list[i]) do d[k] = v end
+        local oldWin = d.window or "Main"
+        local oldTab = d.tab or "Main"
+        local oldSub = d.subtab
+        d.window = main
+        d.windowWidth = opt.width or 700
+        d.windowOrder = 1
+        d.tab = tabMap[oldWin] or oldWin
+        d.tabOrder = ({ Aiming = 1, Visuals = 2, Misc = 3, Output = 4, Options = 5, ["Script Viewer"] = 6, ["Player List"] = 7 })[d.tab] or 99
+        d.subtab = oldTab
+        d.subtabOrder = d.order or 0
+        if oldSub and oldSub ~= "" then
+            d.section = oldSub .. (d.section and (" • " .. d.section) or "")
+        end
+        out[#out + 1] = d
+    end
+    return out
+end
+
 function Bridge.Attach(ui, esp, opt)
     opt = opt or {}
+    if opt.singleWindow == nil then opt.singleWindow = true end
     Bridge.Detach(ui)
     if Runtime.bridge and Runtime.bridge.ui ~= ui then
         Bridge.Detach(Runtime.bridge.ui)
@@ -302,8 +339,11 @@ function Bridge.Attach(ui, esp, opt)
         local descs = esp:GetDescriptors(prefix)
         local extra = Bridge.Descriptors(prefix)
         for i = 1, #extra do descs[#descs + 1] = extra[i] end
+        descs = layoutDescriptors(descs, opt)
         wins = ui:BuildFromDescriptors(descs, {
-            Width = opt.Width or 280,
+            Width = opt.Width or (opt.singleWindow and (opt.width or 700) or 280),
+            columns = opt.columns or 2,
+            defaultTab = "Main",
             windowOrder = opt.windowOrder or {
                 Combat = 1,
                 Visuals = 2,
@@ -311,6 +351,7 @@ function Bridge.Attach(ui, esp, opt)
                 World = 4,
                 Self = 5,
                 Config = 6,
+                Control = 1,
             },
             windowWidth = opt.windowWidth or {
                 Combat = 300,
@@ -319,6 +360,7 @@ function Bridge.Attach(ui, esp, opt)
                 World = 280,
                 Self = 260,
                 Config = 260,
+                Control = opt.width or 700,
             },
         })
     else
