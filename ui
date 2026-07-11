@@ -111,7 +111,8 @@ local function unpackValue(v)
     if type(v) == "table" and v.__easyui == "Color3" then
         return Color3.new(tonumber(v.r) or 1, tonumber(v.g) or 1, tonumber(v.b) or 1)
     elseif type(v) == "table" and v.__easyui == "EnumItem" then
-        local enumName = tostring(v.enum or ""):match("Enum%.(.+)")
+        local rawEnum = tostring(v.enum or "")
+        local enumName = rawEnum:match("Enum%.(.+)") or rawEnum
         local et = enumName and Enum[enumName]
         return et and et[v.name]
     elseif type(v) == "table" then
