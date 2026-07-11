@@ -681,6 +681,22 @@ local Widgets = {}
 local Plugins = {}
 local Alive = {}
 
+local function shortestColumn(target)
+    if not target.colFrames or #target.colFrames == 0 then
+        return target.body
+    end
+    local best = target.colFrames[1]
+    local bestY = target.colLists[1] and target.colLists[1].AbsoluteContentSize.Y or 0
+    for i = 2, #target.colFrames do
+        local y = target.colLists[i] and target.colLists[i].AbsoluteContentSize.Y or 0
+        if y < bestY then
+            best = target.colFrames[i]
+            bestY = y
+        end
+    end
+    return best
+end
+
 local function makeRow(target, h)
     local t = target.ui.theme
     local row = mk("Frame", {
@@ -711,22 +727,6 @@ local function makeScroll(parent, z)
         Padding = UDim.new(0, 4),
     }, body)
     return body, list
-end
-
-local function shortestColumn(target)
-    if not target.colFrames or #target.colFrames == 0 then
-        return target.body
-    end
-    local best = target.colFrames[1]
-    local bestY = target.colLists[1] and target.colLists[1].AbsoluteContentSize.Y or 0
-    for i = 2, #target.colFrames do
-        local y = target.colLists[i] and target.colLists[i].AbsoluteContentSize.Y or 0
-        if y < bestY then
-            best = target.colFrames[i]
-            bestY = y
-        end
-    end
-    return best
 end
 
 local function ensureColumns(target, count)
