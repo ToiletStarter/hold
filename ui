@@ -200,6 +200,22 @@ local function bindFreeDrag(ui, key, gui, getRect, setPos)
 end
 
 local Themes = {
+    blush = {
+        bg0 = Color3.fromRGB(17, 16, 21),
+        bg1 = Color3.fromRGB(20, 19, 24),
+        bg2 = Color3.fromRGB(24, 23, 31),
+        bg3 = Color3.fromRGB(29, 28, 36),
+        line = Color3.fromRGB(36, 34, 44),
+        lineHi = Color3.fromRGB(54, 50, 64),
+        text = Color3.fromRGB(242, 237, 243),
+        sub = Color3.fromRGB(191, 188, 199),
+        dim = Color3.fromRGB(121, 118, 130),
+        accent = Color3.fromRGB(240, 145, 192),
+        accentSoft = Color3.fromRGB(112, 68, 92),
+        good = Color3.fromRGB(162, 220, 184),
+        warn = Color3.fromRGB(255, 205, 118),
+        bad = Color3.fromRGB(255, 118, 138),
+    },
     pastel = {
         bg0 = Color3.fromRGB(16, 14, 20),
         bg1 = Color3.fromRGB(24, 21, 29),
@@ -649,6 +665,8 @@ local Tab = {}
 Tab.__index = Tab
 local SubTab = {}
 SubTab.__index = SubTab
+local Group = {}
+Group.__index = Group
 
 local G = (getgenv and getgenv()) or _G
 G.__EASY_STACK = G.__EASY_STACK or {}
@@ -670,7 +688,7 @@ local function makeRow(target, h)
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ZIndex = target.frame.ZIndex + 2,
-    }, target.body)
+    }, shortestColumn(target))
     return row, t
 end
 
@@ -695,12 +713,73 @@ local function makeScroll(parent, z)
     return body, list
 end
 
+local function shortestColumn(target)
+    if not target.colFrames or #target.colFrames == 0 then
+        return target.body
+    end
+    local best = target.colFrames[1]
+    local bestY = target.colLists[1] and target.colLists[1].AbsoluteContentSize.Y or 0
+    for i = 2, #target.colFrames do
+        local y = target.colLists[i] and target.colLists[i].AbsoluteContentSize.Y or 0
+        if y < bestY then
+            best = target.colFrames[i]
+            bestY = y
+        end
+    end
+    return best
+end
+
+local function ensureColumns(target, count)
+    count = max(1, floor(tonumber(count) or 1 + 0.5))
+    if target.columns == count and target.colWrap and target.colWrap.Parent == target.body then
+        return
+    end
+    target.columns = count
+    if target.colWrap then
+        pcall(function() target.colWrap:Destroy() end)
+    end
+    target.colWrap = nil
+    target.colFrames = nil
+    target.colLists = nil
+    if count <= 1 then
+        return
+    end
+    local wrap = mk("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = target.frame.ZIndex + 1,
+    }, target.body)
+    local frames, lists = {}, {}
+    for i = 1, count do
+        local width = 1 / count
+        local f = mk("Frame", {
+            Size = UDim2.new(width, i == 1 and -4 or -4, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Position = UDim2.new((i - 1) * width, i == 1 and 0 or 4, 0, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ZIndex = target.frame.ZIndex + 1,
+        }, wrap)
+        local l = mk("UIListLayout", {
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0, 8),
+        }, f)
+        frames[i] = f
+        lists[i] = l
+    end
+    target.colWrap = wrap
+    target.colFrames = frames
+    target.colLists = lists
+end
+
 local function makeField(parent, theme, size, pos, anchor, z)
     local f = mk("Frame", {
         Size = size,
         Position = pos,
         AnchorPoint = anchor or Vector2.new(0, 0.5),
-        BackgroundColor3 = theme.bg2,
+        BackgroundColor3 = theme.bg3,
         BorderSizePixel = 0,
         ZIndex = z,
     }, parent)
@@ -1671,6 +1750,9 @@ function Window:_refresh()
         for j = 1, #tab.subtabs do
             local sub = tab.subtabs[j]
             sub.body.Visible = active == sub and self.open
+            if sub.buttonShell then
+                sub.buttonShell.Visible = self.activeTab == tab
+            end
             if sub.button then
                 sub.button.TextColor3 = (tab.activeSub == sub) and self.ui.theme.text or self.ui.theme.dim
                 if sub.fill then
@@ -1914,6 +1996,72 @@ end
 bindTargetMethods(Window)
 bindTargetMethods(Tab)
 bindTargetMethods(SubTab)
+bindTargetMethods(Group)
+
+local function bindContainerMethods(proto)
+    function proto:SetColumns(n)
+        ensureColumns(self, n)
+        return self
+    end
+
+    function proto:Group(id, title, opt)
+        opt = opt or {}
+        title = title or id or opt.title or opt.label or "Group"
+        id = id or cleanName(title)
+        local card = mk("Frame", {
+            Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = self.ui.theme.bg2,
+            BorderSizePixel = 0,
+            ZIndex = self.frame.ZIndex + 2,
+        }, shortestColumn(self))
+        corner(5, card)
+        stroke(self.ui.theme.line, 1, 0, card)
+        pad(6, 6, 8, 8, card)
+        local head = label(card, title, self.ui.theme, 12, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 16), card.ZIndex + 1, Enum.TextXAlignment.Left, self.ui.theme.text)
+        local body = mk("Frame", {
+            Size = UDim2.new(1, 0, 0, 0),
+            Position = UDim2.new(0, 0, 0, 18),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ZIndex = card.ZIndex + 1,
+        }, card)
+        local list = mk("UIListLayout", {
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0, 4),
+        }, body)
+        local group = setmetatable({
+            ui = self.ui,
+            win = self.win or self,
+            frame = self.frame,
+            id = id,
+            title = head,
+            body = body,
+            list = list,
+            widgets = {},
+            card = card,
+        }, Group)
+        function group:_add(widget)
+            self.widgets[#self.widgets + 1] = widget
+            return self.win:_add(widget)
+        end
+        list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            if group.win and group.win._refresh then
+                group.win:_refresh()
+            end
+        end)
+        return group
+    end
+
+    function proto:Card(id, title, opt)
+        return self:Group(id, title, opt)
+    end
+end
+
+bindContainerMethods(Window)
+bindContainerMethods(Tab)
+bindContainerMethods(SubTab)
 
 function Window:GetTab(id)
     return self.tabById[id]
@@ -2119,7 +2267,7 @@ function UI.new(opt)
     self.title = opt.Title or "EasyUI"
     self.showWatermark = opt.Watermark == true
     self.sig = opt.Signature or self.title
-    self.themeName = opt.Theme or "pastel"
+    self.themeName = opt.Theme or "blush"
     self.theme = themeOf(self.themeName, opt.ThemeOverride, opt.Accent)
     self.menuKey = opt.MenuKey or Enum.KeyCode.LeftAlt
     self.visible = opt.Visible ~= false
@@ -2807,39 +2955,66 @@ function UI:BuildFromDescriptors(descs, opt)
         end)
     end
 
+    local function addOne(target, d)
+        local kind = tostring(d.kind or "label"):lower()
+        local id = d.id or cleanName((d.path or d.label or kind):gsub("[%.]", "_"))
+        if kind == "toggle" then
+            target:Toggle(id, d)
+        elseif kind == "slider" then
+            target:Slider(id, d)
+        elseif kind == "dropdown" then
+            target:Dropdown(id, d)
+        elseif kind == "mode" then
+            target:Mode(id, d)
+        elseif kind == "keybind" then
+            target:Keybind(id, d)
+        elseif kind == "box" or kind == "textbox" or kind == "number" then
+            target:Box(id, d)
+        elseif kind == "color" or kind == "colorpicker" then
+            target:Color(id, d)
+        elseif kind == "meter" or kind == "progress" then
+            target:Meter(id, d)
+        elseif kind == "button" then
+            target:Button(id, d.text or d.label or id, d)
+        elseif kind == "label" or kind == "note" then
+            target:Label(id, d.text or d.label or "")
+        elseif kind == "section" or kind == "separator" then
+            target:Section(d.text or d.label or d.section or id)
+        end
+    end
+
     local function addItems(target, items)
         sortItems(items)
-        local lastSection
+        if target.SetColumns then
+            local cols = opt.columns or (#items >= 10 and 2 or 1)
+            target:SetColumns(cols)
+        end
+        local buckets, order = {}, {}
         for i = 1, #items do
             local d = items[i]
+            local section = d.section or "Main"
             local kind = tostring(d.kind or "label"):lower()
-            if kind ~= "section" and kind ~= "separator" and d.section and d.section ~= lastSection then
-                target:Section(d.section)
-                lastSection = d.section
-            end
-            local id = d.id or cleanName((d.path or d.label or kind):gsub("[%.]", "_"))
             if kind == "section" or kind == "separator" then
-                target:Section(d.text or d.label or d.section or id)
-            elseif kind == "toggle" then
-                target:Toggle(id, d)
-            elseif kind == "slider" then
-                target:Slider(id, d)
-            elseif kind == "dropdown" then
-                target:Dropdown(id, d)
-            elseif kind == "mode" then
-                target:Mode(id, d)
-            elseif kind == "keybind" then
-                target:Keybind(id, d)
-            elseif kind == "box" or kind == "textbox" or kind == "number" then
-                target:Box(id, d)
-            elseif kind == "color" or kind == "colorpicker" then
-                target:Color(id, d)
-            elseif kind == "meter" or kind == "progress" then
-                target:Meter(id, d)
-            elseif kind == "button" then
-                target:Button(id, d.text or d.label or id, d)
-            elseif kind == "label" or kind == "note" then
-                target:Label(id, d.text or d.label or "")
+                section = d.text or d.label or section
+            end
+            if not buckets[section] then
+                buckets[section] = {}
+                order[#order + 1] = section
+            end
+            if kind ~= "section" and kind ~= "separator" then
+                buckets[section][#buckets[section] + 1] = d
+            end
+        end
+        for i = 1, #order do
+            local section = order[i]
+            local bucket = buckets[section]
+            if #bucket == 0 then
+                target:Section(section)
+            else
+                local group = target:Group(cleanName(section), section)
+                for j = 1, #bucket do
+                    addOne(group, bucket[j])
+                end
             end
         end
     end
