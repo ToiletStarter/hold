@@ -1111,6 +1111,23 @@ local function box2d(pivot, size, project)
     return lx, ly, hx - lx, hy - ly
 end
 
+local function characterBox(char, root)
+    local base = root.CFrame
+    local lo, hi
+    for _, part in ipairs(char:GetChildren()) do
+        if part:IsA("BasePart") and part ~= root then
+            local p = base:PointToObjectSpace(part.Position)
+            local h = part.Size * 0.5
+            local a, b = p - h, p + h
+            lo = lo and v3(min(lo.X, a.X), min(lo.Y, a.Y), min(lo.Z, a.Z)) or a
+            hi = hi and v3(max(hi.X, b.X), max(hi.Y, b.Y), max(hi.Z, b.Z)) or b
+        end
+    end
+    if not lo then return base, v3(4, 6, 3) end
+    local size = hi - lo
+    return base * cf((lo + hi) * 0.5), v3(clamp(size.X, 2, 12), clamp(size.Y, 3, 16), clamp(size.Z, 1, 8))
+end
+
 local function feet(root, hum)
     if not root then
         return nil
@@ -1558,7 +1575,7 @@ function ESP:_snap()
                     local sx, sy, depth, on = self._proj(root.Position)
                     local bx, by, bw, bh
                     if on and depth > 0 and (self:_turn(r.uid, boxStep, 2) or not r.box) then
-                        r.pivot, r.size = char:GetBoundingBox()
+                        r.pivot, r.size = characterBox(char, root)
                         bx, by, bw, bh = box2d(r.pivot, r.size, self._proj)
                         if bx then
                             r.box = { bx, by, bw, bh }
