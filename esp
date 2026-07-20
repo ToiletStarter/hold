@@ -405,6 +405,7 @@ local function defaults()
         rainbowRate = 1,
         friendTint = true,
         friendCol = p.friend,
+        textOutline = true,
         vis = {
             check = false,
             hide = false,
@@ -1317,6 +1318,7 @@ function ESP:_boot()
             pivot = nil,
             size = nil,
             box = nil,
+            boxMiss = 0,
             hitAt = -1,
             hitDmg = 0,
             hp = 0,
@@ -1560,10 +1562,15 @@ function ESP:_snap()
                         bx, by, bw, bh = box2d(r.pivot, r.size, self._proj)
                         if bx then
                             r.box = { bx, by, bw, bh }
+                            r.boxMiss = 0
                         else
-                            r.box = nil
+                            r.boxMiss = (r.boxMiss or 0) + 1
+                            if r.boxMiss >= 3 then r.box = nil end
                         end
                     elseif r.box then
+                        bx, by, bw, bh = r.box[1], r.box[2], r.box[3], r.box[4]
+                    end
+                    if not bx and r.box then
                         bx, by, bw, bh = r.box[1], r.box[2], r.box[3], r.box[4]
                     end
 
@@ -1758,11 +1765,11 @@ function ESP:_flagsDraw(s, x, y, w)
                 local tc = out[2] or cfg.col
                 local width = fontSizeWidth(txt, cfg.size)
                 local tx = right and col or col - width
-                local d = self.pool:txt("f" .. s.uid .. i, txt, tx, row, cfg.size, tc, false, FONT, true)
+                local d = self.pool:txt("f" .. s.uid .. i, txt, tx, row, cfg.size, tc, false, FONT, self.cfg.textOutline)
                 if d and not right then
                     local bounds = d.TextBounds and d.TextBounds.X or width
                     if abs(bounds - width) > 1 then
-                        self.pool:txt("f" .. s.uid .. i, txt, col - bounds, row, cfg.size, tc, false, FONT, true)
+                        self.pool:txt("f" .. s.uid .. i, txt, col - bounds, row, cfg.size, tc, false, FONT, self.cfg.textOutline)
                     end
                 end
                 row = row + cfg.size + cfg.gap
@@ -1854,10 +1861,10 @@ function ESP:_hpDraw(s, a)
     self.pool:box("hg" .. s.uid, x, s.by, cfg.w, s.bh, c3(0.08, 0.08, 0.11), true, 1, 0.55 * a)
     self.pool:box("hf" .. s.uid, x, s.by + (s.bh - h), cfg.w, max(1, h), c, true, 1, a)
     if cfg.text and s.hpPct < 1 then
-        self.pool:txt("ht" .. s.uid, tostring(floor(s.hp + 0.5)), x + cfg.w * 0.5, s.by - 12, 10, c, true, FONT, true, a)
+        self.pool:txt("ht" .. s.uid, tostring(floor(s.hp + 0.5)), x + cfg.w * 0.5, s.by - 12, 10, c, true, FONT, self.cfg.textOutline, a)
     end
     if cfg.pct then
-        self.pool:txt("hp" .. s.uid, tostring(floor(s.hpPct * 100)) .. "%", s.bx + s.bw * 0.5, s.by + s.bh + 3, 10, c, true, FONT, true, a)
+        self.pool:txt("hp" .. s.uid, tostring(floor(s.hpPct * 100)) .. "%", s.bx + s.bw * 0.5, s.by + s.bh + 3, 10, c, true, FONT, self.cfg.textOutline, a)
     end
 end
 
@@ -1875,7 +1882,7 @@ function ESP:_nameDraw(s, c, a)
         txt = s.plr.DisplayName
     end
     local y = s.by - n.size - 4
-    self.pool:txt("n" .. s.uid, txt, s.bx + s.bw * 0.5, y, n.size, n.col or c, true, FONT, true, a)
+    self.pool:txt("n" .. s.uid, txt, s.bx + s.bw * 0.5, y, n.size, n.col or c, true, FONT, self.cfg.textOutline, a)
     return y
 end
 
@@ -1885,7 +1892,7 @@ function ESP:_distDraw(s, c, a, y)
     end
     local d = self.cfg.dist
     local txt = tostring(floor(s.dist + 0.5)) .. d.suf
-    self.pool:txt("d" .. s.uid, txt, s.bx + s.bw * 0.5, y, d.size, d.col or c, true, FONT, true, a)
+    self.pool:txt("d" .. s.uid, txt, s.bx + s.bw * 0.5, y, d.size, d.col or c, true, FONT, self.cfg.textOutline, a)
     return y + d.size
 end
 
@@ -2371,10 +2378,10 @@ function ESP:_ents()
             self.pool:dot("ed" .. id, lx + bw * 0.5, ly + bh, 3, e.col, true, 1, 12)
         end
         if e.name and e.label then
-            self.pool:txt("en" .. id, e.label, lx + bw * 0.5, ly - 16, 12, e.col, true, FONT, true)
+            self.pool:txt("en" .. id, e.label, lx + bw * 0.5, ly - 16, 12, e.col, true, FONT, self.cfg.textOutline)
         end
         if e.dist then
-            self.pool:txt("em" .. id, tostring(floor(dist + 0.5)) .. "m", lx + bw * 0.5, ly + bh + 3, 10, e.col, true, FONT, true)
+            self.pool:txt("em" .. id, tostring(floor(dist + 0.5)) .. "m", lx + bw * 0.5, ly + bh + 3, 10, e.col, true, FONT, self.cfg.textOutline)
         end
         if e.tracer then
             self.pool:line("et" .. id, vp.X * 0.5, vp.Y, lx + bw * 0.5, ly + bh, e.col, 1, 1)
