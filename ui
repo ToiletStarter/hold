@@ -2170,6 +2170,7 @@ function Window:_makeTabButton(parent, text, small)
 end
 
 function Window:Tab(id, title)
+    local win = self
     id = id or cleanName(title)
     if self.tabById[id] then
         return self.tabById[id]
@@ -2199,11 +2200,11 @@ function Window:Tab(id, title)
         return self.win:_add(widget)
     end
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        self.win:_refresh()
+        win:_refresh()
     end)
     btn.MouseButton1Click:Connect(function()
-        self.win.activeTab = tab
-        self.win:_refresh()
+        win.activeTab = tab
+        win:_refresh()
     end)
     self.tabs[#self.tabs + 1] = tab
     self.tabById[id] = tab
@@ -2215,19 +2216,21 @@ function Window:Tab(id, title)
 end
 
 function Tab:SubTab(id, title)
+    local tab = self
+    local win = self.win
     id = id or cleanName(title)
     if self.subtabById[id] then
         return self.subtabById[id]
     end
-    local shell, btn, fill = self.win:_makeTabButton(self.win.subBar, title or id, true)
-    local body, list = makeScroll(self.win.frame, self.win.frame.ZIndex + 1)
+    local shell, btn, fill = win:_makeTabButton(win.subBar, title or id, true)
+    local body, list = makeScroll(win.frame, win.frame.ZIndex + 1)
     body.Visible = false
     body.ScrollBarImageColor3 = self.ui.theme.lineHi
     local sub = setmetatable({
-        ui = self.ui,
-        win = self.win,
-        tab = self,
-        frame = self.frame,
+        ui = tab.ui,
+        win = win,
+        tab = tab,
+        frame = tab.frame,
         id = id,
         title = title or id,
         widgets = {},
@@ -2242,19 +2245,19 @@ function Tab:SubTab(id, title)
         return self.win:_add(widget)
     end
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        self.win:_refresh()
+        win:_refresh()
     end)
     btn.MouseButton1Click:Connect(function()
-        self.activeSub = sub
-        self.win.activeTab = self
-        self.win:_refresh()
+        tab.activeSub = sub
+        win.activeTab = tab
+        win:_refresh()
     end)
-    self.subtabs[#self.subtabs + 1] = sub
-    self.subtabById[id] = sub
-    if not self.activeSub then
-        self.activeSub = sub
+    tab.subtabs[#tab.subtabs + 1] = sub
+    tab.subtabById[id] = sub
+    if not tab.activeSub then
+        tab.activeSub = sub
     end
-    self.win:_refresh()
+    win:_refresh()
     return sub
 end
 
