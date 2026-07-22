@@ -2549,6 +2549,9 @@ function ESP:_self()
 
     for id, spec in pairs(self.rings) do
         local p = self:center(spec.at)
+        if typeof(p) == "Instance" then
+            p = self:center(p)
+        end
         if p then
             self:_ring("sr" .. tostring(id), p + v3(0, spec.y or 0, 0), spec, 0)
         end

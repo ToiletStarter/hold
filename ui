@@ -435,7 +435,7 @@ function Router.new(ui)
             w:set(nil)
             return
         end
-        if ui._keyWidget and (input.UserInputType == Enum.UserInputType.Keyboard or mouseKeys[input.UserInputType]) and not gp then
+        if ui._keyWidget and (input.UserInputType == Enum.UserInputType.Keyboard or mouseKeys[input.UserInputType]) then
             local w = ui._keyWidget
             ui._keyWidget = nil
             capture(false)
