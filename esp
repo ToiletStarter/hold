@@ -543,6 +543,7 @@ local function defaults()
             label = true,
             hp = true,
             dist = true,
+            card = true,
         },
         list = {
             on = false,
@@ -1135,6 +1136,23 @@ local function box2d(pivot, size, project)
     return lx, ly, hx - lx, hy - ly
 end
 
+local function characterBox(char, root)
+    local base = root.CFrame
+    local lo, hi
+    for _, part in ipairs(char:GetChildren()) do
+        if part:IsA("BasePart") and part ~= root and part.Transparency < 1 then
+            local p = base:PointToObjectSpace(part.Position)
+            local h = part.Size * 0.5
+            local a, b = p - h, p + h
+            lo = lo and v3(min(lo.X, a.X), min(lo.Y, a.Y), min(lo.Z, a.Z)) or a
+            hi = hi and v3(max(hi.X, b.X), max(hi.Y, b.Y), max(hi.Z, b.Z)) or b
+        end
+    end
+    if not lo then return char:GetBoundingBox() end
+    local size = hi - lo
+    return base * cf((lo + hi) * 0.5), v3(clamp(size.X, 1, 12), clamp(size.Y, 1, 16), clamp(size.Z, 1, 8))
+end
+
 local function feet(root, hum)
     if not root then
         return nil
@@ -1216,6 +1234,8 @@ function ESP.new(opt)
     self.binds = {}
     self.snap = {}
     self.target = nil
+    self.targetSrc = nil
+    self.targetInfo = nil
     self.running = false
     self.frame = 0
     self.t = 0
@@ -1561,7 +1581,9 @@ function ESP:_snap()
     local visStep, boxStep, toolStep = self:_plan()
     local eye = cam.CFrame.Position
     local out = {}
-    local reach = max(self.cfg.maxRange, self.cfg.espRange, self.cfg.radar.range)
+    local visualRange = self.cfg.espRange <= 0 and huge or self.cfg.espRange
+    local maxRange = self.cfg.maxRange <= 0 and huge or self.cfg.maxRange
+    local reach = max(maxRange, visualRange, self.cfg.radar.range)
     local needVis = self.cfg.vis.check or self.cfg.vis.hide or self.cfg.vis.tint or self.cfg.target.visOnly or (self.cfg.chams.on and self.cfg.chams.tint)
 
     for _, plr in ipairs(self.plrs) do
@@ -1590,7 +1612,7 @@ function ESP:_snap()
                     local sx, sy, depth, on = self._proj(root.Position)
                     local bx, by, bw, bh
                     if on and depth > 0 and (self:_turn(r.uid, boxStep, 2) or not r.box) then
-                        r.pivot, r.size = char:GetBoundingBox()
+                        r.pivot, r.size = characterBox(char, root)
                         bx, by, bw, bh = box2d(r.pivot, r.size, self._proj)
                         if bx then
                             r.box = { bx, by, bw, bh }
@@ -1669,7 +1691,7 @@ function ESP:_snapNPC(out, eye)
     if not ok or type(list) ~= "table" then
         return
     end
-    local reach = max(ncfg.maxRange or 0, ncfg.espRange or 0)
+    local reach = ((ncfg.maxRange or 0) <= 0 or (ncfg.espRange or 0) <= 0) and huge or max(ncfg.maxRange, ncfg.espRange)
     local needVis = ncfg.vis.check or ncfg.vis.hide or ncfg.vis.tint or (ncfg.chams.on and ncfg.chams.tint)
     local recs = self.npcRecs
     local seen = self._npcSeen or {}
@@ -2103,7 +2125,7 @@ function ESP:_player(s)
     if not s.on or s.depth <= 0 or not s.bx then
         return
     end
-    if s.dist > cfg.espRange then
+    if cfg.espRange > 0 and s.dist > cfg.espRange then
         return
     end
 
@@ -2260,10 +2282,22 @@ function ESP:_pick()
     end
     local vp = cam.ViewportSize
     local cx, cy = vp.X * 0.5, vp.Y * 0.5
+    if type(self.targetSrc) == "function" then
+        local ok, source = pcall(self.targetSrc)
+        if ok and source then
+            for i = 1, #self.snap do
+                local s = self.snap[i]
+                if s == source or s.char == source or s.plr == source then
+                    self.target = s
+                    return
+                end
+            end
+        end
+    end
     local best, score = nil, huge
     for i = 1, #self.snap do
         local s = self.snap[i]
-        if not s.npc and s.bx and s.on and s.depth > 0 and s.dist <= self.cfg.espRange then
+        if not s.npc and s.bx and s.on and s.depth > 0 and (self.cfg.espRange <= 0 or s.dist <= self.cfg.espRange) then
             if (cfg.allies or not s.ally) and (cfg.friends or not s.friend) and (not cfg.visOnly or s.vis ~= false) then
                 local tx = s.bx + s.bw * 0.5
                 local ty = s.by + s.bh * 0.5
@@ -2290,7 +2324,27 @@ function ESP:_target()
         self.pool:dot("tg_fov", cx, cy, cfg.fov, cfg.col, false, 0.4, 64, nil, cfg.w)
     end
     local s = self.target
-    if not s or not s.bx then
+    if not s then
+        return
+    end
+    if cfg.card then
+        local info
+        if type(self.targetInfo) == "function" then
+            local ok, value = pcall(self.targetInfo, s)
+            if ok and value then info = tostring(value) end
+        end
+        local name = s.plr and (s.plr.DisplayName .. "  @" .. s.plr.Name) or s.name or "TARGET"
+        local text = name .. "\n" .. tostring(floor(s.hp + 0.5)) .. "/" .. tostring(floor(s.maxHp + 0.5)) .. " HP  |  " .. tostring(floor(s.dist + 0.5)) .. "m"
+        if info and info ~= "" then text = text .. "\n" .. info end
+        local lines = 2
+        for _ in text:gmatch("\n") do lines = lines + 1 end
+        local cw, ch = 280, lines * 15 + 14
+        local cardX, cardY = vp.X - cw - 18, 70
+        self.pool:box("tg_cb", cardX, cardY, cw, ch, BLACK, true, 1, 0.72, 80)
+        self.pool:box("tg_co", cardX, cardY, cw, ch, cfg.col, false, 1, 0.9, 81)
+        self.pool:txt("tg_ct", text, cardX + 9, cardY + 7, 12, cfg.col, false, FONT, true, 1, 82)
+    end
+    if not s.bx then
         return
     end
     local c = s.friend and cfg.friend or (s.ally and cfg.ally or cfg.col)
@@ -2337,7 +2391,7 @@ end
 function ESP:_threat()
     local cfg = self.cfg.threat
     local s = self.target
-    if not cfg.on or not s or not cam then
+    if not cfg.on or not s or s.npc or not s.plr or not cam then
         return
     end
     if cfg.visOnly and s.vis == false then
@@ -2375,7 +2429,7 @@ function ESP:_list()
     end
     if cfg.title then
         local t = "PLAYERS " .. tostring(self.stats.roster)
-        if self.target then
+        if self.target and not self.target.npc and self.target.plr then
             t = t .. "  TARGET: " .. self.target.plr.DisplayName
         end
         self.pool:txt("lst_title", t, cfg.x + 6, cfg.y + 3, 11, cfg.col, false, FONT, true, 1, 62)
@@ -2540,7 +2594,10 @@ function ESP:_ents()
             self.pool:dot("ed" .. id, lx + bw * 0.5, ly + bh, 3, e.col, true, 1, 12)
         end
         if e.name and e.label then
-            self.pool:txt("en" .. id, e.label, lx + bw * 0.5, ly - 16, 12, e.col, true, FONT, true)
+            local label = type(e.label) == "function" and e.label(obj) or e.label
+            if label and label ~= "" then
+                self.pool:txt("en" .. id, tostring(label), lx + bw * 0.5, ly - 16, 12, e.col, true, FONT, true)
+            end
         end
         if e.dist then
             self.pool:txt("em" .. id, tostring(floor(dist + 0.5)) .. "m", lx + bw * 0.5, ly + bh + 3, 10, e.col, true, FONT, true)
@@ -2914,6 +2971,16 @@ end
 
 function ESP:setNPCSource(fn)
     self.npcSrc = type(fn) == "function" and fn or nil
+    return self
+end
+
+function ESP:setTargetSource(fn)
+    self.targetSrc = type(fn) == "function" and fn or nil
+    return self
+end
+
+function ESP:setTargetInfo(fn)
+    self.targetInfo = type(fn) == "function" and fn or nil
     return self
 end
 
@@ -3598,7 +3665,7 @@ function ESP:statsGet()
         drawn = self.stats.drawn,
         pool = self.pool.size,
         roster = #self.snap,
-        target = self.target and self.target.plr.DisplayName or nil,
+        target = self.target and self.target.plr and self.target.plr.DisplayName or self.target and self.target.name or nil,
         ents = (function()
             local n = 0
             for _ in pairs(self.ents) do
