@@ -405,13 +405,13 @@ function Router.new(ui)
     }, Router)
 
     self.cons[#self.cons + 1] = Input.InputBegan:Connect(function(input, gp)
-        if ui._keyWidget and (input.UserInputType == Enum.UserInputType.Keyboard or input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton3) then
+        if ui._keyWidget and input.UserInputType == Enum.UserInputType.Keyboard then
             local w = ui._keyWidget
             ui._keyWidget = nil
-            if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
+            if input.KeyCode == Enum.KeyCode.Escape then
                 w:set(nil)
             else
-                w:set(input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode or input.UserInputType)
+                w:set(input.KeyCode)
             end
             return
         end
@@ -1365,8 +1365,7 @@ function Widgets.keybind(win, id, opt)
         return nil
     end
     function w:render(v)
-        local names = {MouseButton1 = "Mouse1", MouseButton2 = "RMB", MouseButton3 = "Mouse3"}
-        txt.Text = v and ("[ " .. (names[v.Name] or v.Name) .. " ]") or "[ ... ]"
+        txt.Text = v and ("[ " .. v.Name .. " ]") or "[ ... ]"
         txt.TextColor3 = w.ui._keyWidget == w and w.ui.theme.accent or w.ui.theme.sub
         shell.BackgroundColor3 = w.ui.theme.bg2
         shell.UIStroke.Color = w.ui.theme.line
@@ -1378,7 +1377,7 @@ function Widgets.keybind(win, id, opt)
     w:own(Input.InputBegan:Connect(function(input, gp)
         if gp then return end
         if w.ui._keyWidget then return end
-        if w.value and ((w.value.EnumType == Enum.KeyCode and input.KeyCode == w.value) or (w.value.EnumType == Enum.UserInputType and input.UserInputType == w.value)) then
+        if w.value and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == w.value then
             safe(opt.onPress or w.onPress, w.value, w)
         end
     end))
@@ -2171,7 +2170,6 @@ function Window:_makeTabButton(parent, text, small)
 end
 
 function Window:Tab(id, title)
-    local win = self
     id = id or cleanName(title)
     if self.tabById[id] then
         return self.tabById[id]
@@ -2201,11 +2199,11 @@ function Window:Tab(id, title)
         return self.win:_add(widget)
     end
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        win:_refresh()
+        self.win:_refresh()
     end)
     btn.MouseButton1Click:Connect(function()
-        win.activeTab = tab
-        win:_refresh()
+        self.win.activeTab = tab
+        self.win:_refresh()
     end)
     self.tabs[#self.tabs + 1] = tab
     self.tabById[id] = tab
@@ -2217,21 +2215,19 @@ function Window:Tab(id, title)
 end
 
 function Tab:SubTab(id, title)
-    local tab = self
-    local win = self.win
     id = id or cleanName(title)
     if self.subtabById[id] then
         return self.subtabById[id]
     end
-    local shell, btn, fill = win:_makeTabButton(win.subBar, title or id, true)
-    local body, list = makeScroll(win.frame, win.frame.ZIndex + 1)
+    local shell, btn, fill = self.win:_makeTabButton(self.win.subBar, title or id, true)
+    local body, list = makeScroll(self.win.frame, self.win.frame.ZIndex + 1)
     body.Visible = false
     body.ScrollBarImageColor3 = self.ui.theme.lineHi
     local sub = setmetatable({
-        ui = tab.ui,
-        win = win,
-        tab = tab,
-        frame = tab.frame,
+        ui = self.ui,
+        win = self.win,
+        tab = self,
+        frame = self.frame,
         id = id,
         title = title or id,
         widgets = {},
@@ -2246,19 +2242,19 @@ function Tab:SubTab(id, title)
         return self.win:_add(widget)
     end
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        win:_refresh()
+        self.win:_refresh()
     end)
     btn.MouseButton1Click:Connect(function()
-        tab.activeSub = sub
-        win.activeTab = tab
-        win:_refresh()
+        self.activeSub = sub
+        self.win.activeTab = self
+        self.win:_refresh()
     end)
-    tab.subtabs[#tab.subtabs + 1] = sub
-    tab.subtabById[id] = sub
-    if not tab.activeSub then
-        tab.activeSub = sub
+    self.subtabs[#self.subtabs + 1] = sub
+    self.subtabById[id] = sub
+    if not self.activeSub then
+        self.activeSub = sub
     end
-    win:_refresh()
+    self.win:_refresh()
     return sub
 end
 

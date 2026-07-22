@@ -396,7 +396,7 @@ end
 
 local function defaults()
     local p = pal()
-    return {
+    local t = {
         on = false,
         maxRange = 3000,
         espRange = 3000,
@@ -405,7 +405,6 @@ local function defaults()
         rainbowRate = 1,
         friendTint = true,
         friendCol = p.friend,
-        textOutline = true,
         vis = {
             check = false,
             hide = false,
@@ -665,6 +664,31 @@ local function defaults()
             con = 0,
         },
     }
+    t.npc = {
+        on = false,
+        espRange = t.espRange,
+        maxRange = t.maxRange,
+        rainbow = false,
+        rainbowRate = 1,
+        friendTint = false,
+        friendCol = t.friendCol,
+        team = false,
+        vis = deep(t.vis),
+        box = deep(t.box),
+        hp = deep(t.hp),
+        name = deep(t.name),
+        dist = deep(t.dist),
+        flags = deep(t.flags),
+        bones = deep(t.bones),
+        head = deep(t.head),
+        gaze = deep(t.gaze),
+        tracer = deep(t.tracer),
+        rings = { on = false, enemies = true, specs = { ringSpec(nil) } },
+        chams = deep(t.chams),
+        arrow = deep(t.arrow),
+        perf = deep(t.perf),
+    }
+    return t
 end
 
 local DESCRIPTOR_DEFAULTS = defaults()
@@ -1111,23 +1135,6 @@ local function box2d(pivot, size, project)
     return lx, ly, hx - lx, hy - ly
 end
 
-local function characterBox(char, root)
-    local base = root.CFrame
-    local lo, hi
-    for _, part in ipairs(char:GetChildren()) do
-        if part:IsA("BasePart") and part ~= root then
-            local p = base:PointToObjectSpace(part.Position)
-            local h = part.Size * 0.5
-            local a, b = p - h, p + h
-            lo = lo and v3(min(lo.X, a.X), min(lo.Y, a.Y), min(lo.Z, a.Z)) or a
-            hi = hi and v3(max(hi.X, b.X), max(hi.Y, b.Y), max(hi.Z, b.Z)) or b
-        end
-    end
-    if not lo then return base, v3(4, 6, 3) end
-    local size = hi - lo
-    return base * cf((lo + hi) * 0.5), v3(clamp(size.X, 2, 12), clamp(size.Y, 3, 16), clamp(size.Z, 1, 8))
-end
-
 local function feet(root, hum)
     if not root then
         return nil
@@ -1195,6 +1202,10 @@ function ESP.new(opt)
     self.ents = {}
     self.rings = {}
     self.recs = {}
+    self.npcRecs = {}
+    self.npcSrc = nil
+    self.npcLabel = nil
+    self._npcId = 0
     self.plrs = {}
     self.con = {}
     self.binds = {}
@@ -1335,7 +1346,6 @@ function ESP:_boot()
             pivot = nil,
             size = nil,
             box = nil,
-            boxMiss = 0,
             hitAt = -1,
             hitDmg = 0,
             hp = 0,
@@ -1575,19 +1585,14 @@ function ESP:_snap()
                     local sx, sy, depth, on = self._proj(root.Position)
                     local bx, by, bw, bh
                     if on and depth > 0 and (self:_turn(r.uid, boxStep, 2) or not r.box) then
-                        r.pivot, r.size = characterBox(char, root)
+                        r.pivot, r.size = char:GetBoundingBox()
                         bx, by, bw, bh = box2d(r.pivot, r.size, self._proj)
                         if bx then
                             r.box = { bx, by, bw, bh }
-                            r.boxMiss = 0
                         else
-                            r.boxMiss = (r.boxMiss or 0) + 1
-                            if r.boxMiss >= 3 then r.box = nil end
+                            r.box = nil
                         end
                     elseif r.box then
-                        bx, by, bw, bh = r.box[1], r.box[2], r.box[3], r.box[4]
-                    end
-                    if not bx and r.box then
                         bx, by, bw, bh = r.box[1], r.box[2], r.box[3], r.box[4]
                     end
 
@@ -1632,6 +1637,9 @@ function ESP:_snap()
         end
     end
 
+    self.stats.roster = #out
+    self:_snapNPC(out, eye)
+
     if #out > 1 then
         sort(out, function(a, b)
             return a.dist < b.dist
@@ -1639,11 +1647,133 @@ function ESP:_snap()
     end
 
     self.snap = out
-    self.stats.roster = #out
+end
+
+function ESP:_snapNPC(out, eye)
+    local ncfg = self.cfg.npc
+    if not ncfg or not ncfg.on or type(self.npcSrc) ~= "function" then
+        if next(self.npcRecs) then
+            for model, rec in pairs(self.npcRecs) do
+                self:_clearCham(rec)
+                self.npcRecs[model] = nil
+            end
+        end
+        return
+    end
+    local ok, list = pcall(self.npcSrc)
+    if not ok or type(list) ~= "table" then
+        return
+    end
+    local reach = max(ncfg.maxRange or 0, ncfg.espRange or 0)
+    local needVis = ncfg.vis.check or ncfg.vis.hide or ncfg.vis.tint or (ncfg.chams.on and ncfg.chams.tint)
+    local recs = self.npcRecs
+    local seen = self._npcSeen or {}
+    self._npcSeen = seen
+    for k in pairs(seen) do
+        seen[k] = nil
+    end
+    for i = 1, #list do
+        local model = list[i]
+        if typeof(model) == "Instance" and model.Parent then
+            local hum = model:FindFirstChildOfClass("Humanoid")
+            local rootPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+            if rootPart then
+                local hAttr = model:GetAttribute("Health")
+                local hp = tonumber(hAttr) or (hum and hum.Health) or 0
+                local maxHp = (hum and hum.MaxHealth) or 100
+                if maxHp <= 0 then
+                    maxHp = 100
+                end
+                local dead = model:GetAttribute("Dead") == true or (hum and hum.Health <= 0 and hAttr == nil)
+                if hp > 0 and not dead then
+                    local dist = (eye - rootPart.Position).Magnitude
+                    if dist <= reach then
+                        local rec = recs[model]
+                        if not rec then
+                            self._npcId = (self._npcId or 0) + 1
+                            rec = { uid = -self._npcId, model = model, hitAt = -1, hitDmg = 0, hp = hp, hp0 = hp, maxHp = maxHp }
+                            recs[model] = rec
+                        end
+                        seen[model] = true
+                        rec.hp = hp
+                        rec.maxHp = maxHp
+                        if rec.hp0 and hp < rec.hp0 then
+                            self:_markHit(rec, floor(rec.hp0 - hp + 0.5))
+                        end
+                        rec.hp0 = hp
+                        if needVis then
+                            rec.vis = self:_canSee(model, ncfg.vis.points)
+                        end
+                        local sx, sy, depth, on = self._proj(rootPart.Position)
+                        local bx, by, bw, bh
+                        if on and depth > 0 then
+                            local pivot, size = model:GetBoundingBox()
+                            rec.pivot, rec.size = pivot, size
+                            bx, by, bw, bh = box2d(pivot, size, self._proj)
+                            if bx then
+                                rec.box = { bx, by, bw, bh }
+                            else
+                                rec.box = nil
+                            end
+                        elseif rec.box then
+                            bx, by, bw, bh = rec.box[1], rec.box[2], rec.box[3], rec.box[4]
+                        end
+                        local label = model.Name
+                        if type(self.npcLabel) == "function" then
+                            local ok2, lb = pcall(self.npcLabel, model)
+                            if ok2 and lb then
+                                label = lb
+                            end
+                        end
+                        out[#out + 1] = {
+                            plr = nil,
+                            npc = true,
+                            uid = rec.uid,
+                            char = model,
+                            hum = hum,
+                            root = rootPart,
+                            head = model:FindFirstChild("Head"),
+                            tool = "",
+                            name = label,
+                            hp = hp,
+                            maxHp = maxHp,
+                            hpPct = clamp(hp / maxHp, 0, 1),
+                            team = nil,
+                            teamCol = nil,
+                            ally = false,
+                            friend = false,
+                            dist = dist,
+                            foot = feet(rootPart, hum),
+                            vis = rec.vis,
+                            on = on,
+                            sx = sx,
+                            sy = sy,
+                            depth = depth,
+                            bx = bx,
+                            by = by,
+                            bw = bw,
+                            bh = bh,
+                            lod = self:_lod(dist),
+                            pivot = rec.pivot,
+                            size = rec.size,
+                            rec = rec,
+                            cfg = ncfg,
+                        }
+                    end
+                end
+            end
+        end
+    end
+    for model, rec in pairs(recs) do
+        if not seen[model] then
+            self:_clearCham(rec)
+            recs[model] = nil
+        end
+    end
 end
 
 function ESP:_accent(s)
-    local cfg = self.cfg
+    local cfg = s.cfg or self.cfg
     local b = cfg.box
     local c = cfg.rainbow and hue(self.t * cfg.rainbowRate * 0.12) or col(b.col, cfg.friendCol)
 
@@ -1656,7 +1786,7 @@ function ESP:_accent(s)
     elseif b.mode == "hp" then
         c = col(b.hpLow, c):Lerp(col(b.hpFull, c), s.hpPct)
     elseif b.mode == "dist" then
-        c = col(b.hpFull, c):Lerp(col(b.hpLow, c), clamp(s.dist / max(self.cfg.espRange, 1), 0, 1))
+        c = col(b.hpFull, c):Lerp(col(b.hpLow, c), clamp(s.dist / max(cfg.espRange, 1), 0, 1))
     end
 
     if cfg.vis.tint and s.vis ~= nil then
@@ -1676,7 +1806,7 @@ function ESP:_accent(s)
 end
 
 function ESP:_fade(s)
-    local b = self.cfg.box
+    local b = (s.cfg or self.cfg).box
     if not b.fade then
         return 1
     end
@@ -1757,17 +1887,18 @@ function ESP:_bones(s, c)
             local ax, ay, ad = self._proj(a.Position)
             local bx, by, bd = self._proj(b.Position)
             if ad > 0 and bd > 0 then
-                self.pool:line("b" .. s.uid .. i, ax, ay, bx, by, c, self.cfg.bones.w, 1)
+                self.pool:line("b" .. s.uid .. i, ax, ay, bx, by, c, (s.cfg or self.cfg).bones.w, 1)
             end
         end
     end
 end
 
 function ESP:_flagsDraw(s, x, y, w)
-    if not self.cfg.flags.on then
+    local root = s.cfg or self.cfg
+    if not root.flags.on then
         return
     end
-    local cfg = self.cfg.flags
+    local cfg = root.flags
     local right = cfg.side ~= "left"
     local col = right and x + w + 5 or x - 5
     local row = y
@@ -1782,11 +1913,11 @@ function ESP:_flagsDraw(s, x, y, w)
                 local tc = out[2] or cfg.col
                 local width = fontSizeWidth(txt, cfg.size)
                 local tx = right and col or col - width
-                local d = self.pool:txt("f" .. s.uid .. i, txt, tx, row, cfg.size, tc, false, FONT, self.cfg.textOutline)
+                local d = self.pool:txt("f" .. s.uid .. i, txt, tx, row, cfg.size, tc, false, FONT, true)
                 if d and not right then
                     local bounds = d.TextBounds and d.TextBounds.X or width
                     if abs(bounds - width) > 1 then
-                        self.pool:txt("f" .. s.uid .. i, txt, col - bounds, row, cfg.size, tc, false, FONT, self.cfg.textOutline)
+                        self.pool:txt("f" .. s.uid .. i, txt, col - bounds, row, cfg.size, tc, false, FONT, true)
                     end
                 end
                 row = row + cfg.size + cfg.gap
@@ -1796,7 +1927,7 @@ function ESP:_flagsDraw(s, x, y, w)
 end
 
 function ESP:_boxDraw(s, c, a)
-    local b = self.cfg.box
+    local b = (s.cfg or self.cfg).box
     local x, y, w, h = s.bx, s.by, s.bw, s.bh
     if not b.on or not x then
         return
@@ -1865,7 +1996,7 @@ function ESP:_boxDraw(s, c, a)
 end
 
 function ESP:_hpDraw(s, a)
-    local cfg = self.cfg.hp
+    local cfg = (s.cfg or self.cfg).hp
     if not cfg.on or s.maxHp <= 0 or not s.bx then
         return
     end
@@ -1878,48 +2009,54 @@ function ESP:_hpDraw(s, a)
     self.pool:box("hg" .. s.uid, x, s.by, cfg.w, s.bh, c3(0.08, 0.08, 0.11), true, 1, 0.55 * a)
     self.pool:box("hf" .. s.uid, x, s.by + (s.bh - h), cfg.w, max(1, h), c, true, 1, a)
     if cfg.text and s.hpPct < 1 then
-        self.pool:txt("ht" .. s.uid, tostring(floor(s.hp + 0.5)), x + cfg.w * 0.5, s.by - 12, 10, c, true, FONT, self.cfg.textOutline, a)
+        self.pool:txt("ht" .. s.uid, tostring(floor(s.hp + 0.5)), x + cfg.w * 0.5, s.by - 12, 10, c, true, FONT, true, a)
     end
     if cfg.pct then
-        self.pool:txt("hp" .. s.uid, tostring(floor(s.hpPct * 100)) .. "%", s.bx + s.bw * 0.5, s.by + s.bh + 3, 10, c, true, FONT, self.cfg.textOutline, a)
+        self.pool:txt("hp" .. s.uid, tostring(floor(s.hpPct * 100)) .. "%", s.bx + s.bw * 0.5, s.by + s.bh + 3, 10, c, true, FONT, true, a)
     end
 end
 
 function ESP:_nameDraw(s, c, a)
-    if not self.cfg.name.on or not s.bx then
+    local n = (s.cfg or self.cfg).name
+    if not n.on or not s.bx then
         return s.by - 4
     end
-    local n = self.cfg.name
     local txt
-    if n.user and n.on then
-        txt = s.plr.DisplayName .. " (" .. s.plr.Name .. ")"
-    elseif n.user then
-        txt = s.plr.Name
+    if s.plr then
+        if n.user and n.on then
+            txt = s.plr.DisplayName .. " (" .. s.plr.Name .. ")"
+        elseif n.user then
+            txt = s.plr.Name
+        else
+            txt = s.plr.DisplayName
+        end
     else
-        txt = s.plr.DisplayName
+        txt = s.name or "?"
     end
     local y = s.by - n.size - 4
-    self.pool:txt("n" .. s.uid, txt, s.bx + s.bw * 0.5, y, n.size, n.col or c, true, FONT, self.cfg.textOutline, a)
+    self.pool:txt("n" .. s.uid, txt, s.bx + s.bw * 0.5, y, n.size, n.col or c, true, FONT, true, a)
     return y
 end
 
 function ESP:_distDraw(s, c, a, y)
-    if not self.cfg.dist.on or not s.bx then
+    local root = s.cfg or self.cfg
+    if not root.dist.on or not s.bx then
         return y
     end
-    local d = self.cfg.dist
+    local d = root.dist
     local txt = tostring(floor(s.dist + 0.5)) .. d.suf
-    self.pool:txt("d" .. s.uid, txt, s.bx + s.bw * 0.5, y, d.size, d.col or c, true, FONT, self.cfg.textOutline, a)
+    self.pool:txt("d" .. s.uid, txt, s.bx + s.bw * 0.5, y, d.size, d.col or c, true, FONT, true, a)
     return y + d.size
 end
 
 function ESP:_tracer(s, c, a)
-    if not self.cfg.tracer.on or not s.bx then
+    local tc = (s.cfg or self.cfg).tracer
+    if not tc.on or not s.bx then
         return
     end
     local vp = cam.ViewportSize
     local x, y = vp.X * 0.5, vp.Y
-    local from = self.cfg.tracer.from
+    local from = tc.from
     if from == "center" then
         y = vp.Y * 0.5
     elseif from == "top" then
@@ -1928,28 +2065,30 @@ function ESP:_tracer(s, c, a)
         local m = Input:GetMouseLocation()
         x, y = m.X, m.Y
     end
-    self.pool:line("tr" .. s.uid, x, y, s.bx + s.bw * 0.5, s.by + s.bh, c, self.cfg.tracer.w, a)
+    self.pool:line("tr" .. s.uid, x, y, s.bx + s.bw * 0.5, s.by + s.bh, c, tc.w, a)
 end
 
 function ESP:_gaze(s, c, a)
-    if not self.cfg.gaze.on or not s.head then
+    local g = (s.cfg or self.cfg).gaze
+    if not g.on or not s.head then
         return
     end
-    self:_lineW("gz" .. s.uid, s.head.Position, s.head.Position + s.head.CFrame.LookVector * self.cfg.gaze.len, c, 1, a)
+    self:_lineW("gz" .. s.uid, s.head.Position, s.head.Position + s.head.CFrame.LookVector * g.len, c, 1, a)
 end
 
 function ESP:_head(s, c, a)
-    if not self.cfg.head.on or not s.head then
+    local hc = (s.cfg or self.cfg).head
+    if not hc.on or not s.head then
         return
     end
     local x, y, d = self._proj(s.head.Position)
     if d > 0 then
-        self.pool:dot("hd" .. s.uid, x, y, self.cfg.head.size, c, true, a, 12)
+        self.pool:dot("hd" .. s.uid, x, y, hc.size, c, true, a, 12)
     end
 end
 
 function ESP:_player(s)
-    local cfg = self.cfg
+    local cfg = s.cfg or self.cfg
     if cfg.team and s.ally then
         return
     end
@@ -2009,11 +2148,12 @@ function ESP:_player(s)
 end
 
 function ESP:_arrow(s)
-    local cfg = self.cfg.arrow
+    local root = s.cfg or self.cfg
+    local cfg = root.arrow
     if not cfg.on or not cam then
         return
     end
-    if self.cfg.team and s.ally then
+    if root.team and s.ally then
         return
     end
     if s.on and s.depth > 0 then
@@ -2034,7 +2174,7 @@ function ESP:_arrow(s)
     local rad = min(cfg.rad, cfg.rad * cfg.scale * (500 / max(s.dist, 1)))
     local ax, ay = cx + dx * rad, cy + dy * rad
     local rot = atan2(dy, dx)
-    local c = self.cfg.rainbow and hue(self.t * 0.12) or cfg.col
+    local c = root.rainbow and hue(self.t * 0.12) or cfg.col
     local sz = cfg.size
     if cfg.fill then
         if cfg.outline then
@@ -2087,7 +2227,7 @@ function ESP:_radar()
             break
         end
         local s = self.snap[i]
-        if cfg.allies or not s.ally then
+        if not s.npc and (cfg.allies or not s.ally) then
             local rel = s.root.Position - root.Position
             local dx, dz = rel.X, rel.Z
             local dist = sqrt(dx * dx + dz * dz)
@@ -2118,7 +2258,7 @@ function ESP:_pick()
     local best, score = nil, huge
     for i = 1, #self.snap do
         local s = self.snap[i]
-        if s.bx and s.on and s.depth > 0 and s.dist <= self.cfg.espRange then
+        if not s.npc and s.bx and s.on and s.depth > 0 and s.dist <= self.cfg.espRange then
             if (cfg.allies or not s.ally) and (cfg.friends or not s.friend) and (not cfg.visOnly or s.vis ~= false) then
                 local tx = s.bx + s.bw * 0.5
                 local ty = s.by + s.bh * 0.5
@@ -2229,7 +2369,7 @@ function ESP:_list()
         self.pool:box("lst_bd", cfg.x, cfg.y, cfg.w, h, cfg.enemy, false, 1, 0.65, 61)
     end
     if cfg.title then
-        local t = "PLAYERS " .. tostring(#self.snap)
+        local t = "PLAYERS " .. tostring(self.stats.roster)
         if self.target then
             t = t .. "  TARGET: " .. self.target.plr.DisplayName
         end
@@ -2242,7 +2382,7 @@ function ESP:_list()
             break
         end
         local s = self.snap[i]
-        if cfg.allies or not s.ally then
+        if not s.npc and (cfg.allies or not s.ally) then
             n = n + 1
             local y = y0 + (n - 1) * cfg.row
             local c = s.friend and cfg.friend or (s.ally and cfg.ally or (s.teamCol or cfg.enemy))
@@ -2395,10 +2535,10 @@ function ESP:_ents()
             self.pool:dot("ed" .. id, lx + bw * 0.5, ly + bh, 3, e.col, true, 1, 12)
         end
         if e.name and e.label then
-            self.pool:txt("en" .. id, e.label, lx + bw * 0.5, ly - 16, 12, e.col, true, FONT, self.cfg.textOutline)
+            self.pool:txt("en" .. id, e.label, lx + bw * 0.5, ly - 16, 12, e.col, true, FONT, true)
         end
         if e.dist then
-            self.pool:txt("em" .. id, tostring(floor(dist + 0.5)) .. "m", lx + bw * 0.5, ly + bh + 3, 10, e.col, true, FONT, self.cfg.textOutline)
+            self.pool:txt("em" .. id, tostring(floor(dist + 0.5)) .. "m", lx + bw * 0.5, ly + bh + 3, 10, e.col, true, FONT, true)
         end
         if e.tracer then
             self.pool:line("et" .. id, vp.X * 0.5, vp.Y, lx + bw * 0.5, ly + bh, e.col, 1, 1)
@@ -2447,7 +2587,7 @@ function ESP:_clearCham(r)
 end
 
 function ESP:_cham(s)
-    local cfg = self.cfg.chams
+    local cfg = (s.cfg or self.cfg).chams
     local r = s.rec
     if not cfg.on then
         self:_clearCham(r)
@@ -2606,6 +2746,9 @@ function ESP:tick(dt)
         for _, r in pairs(self.recs) do
             self:_clearCham(r)
         end
+        for _, r in pairs(self.npcRecs) do
+            self:_clearCham(r)
+        end
         return
     end
 
@@ -2642,7 +2785,7 @@ function ESP:tick(dt)
         self:_player(self.snap[i])
     end
 
-    if self.cfg.arrow.on then
+    if self.cfg.arrow.on or self.cfg.npc.arrow.on then
         for i = 1, #self.snap do
             self:_arrow(self.snap[i])
         end
@@ -2695,6 +2838,9 @@ function ESP:stop()
     for _, r in pairs(self.recs) do
         self:_clearCham(r)
     end
+    for _, r in pairs(self.npcRecs) do
+        self:_clearCham(r)
+    end
     return self
 end
 
@@ -2729,6 +2875,7 @@ function ESP:destroy()
     end
     self.pool:nuke()
     self.recs = {}
+    self.npcRecs = {}
     self.plrs = {}
     self.ents = {}
     self.rings = {}
@@ -2754,6 +2901,21 @@ end
 function ESP:toggle()
     self.cfg.on = not self.cfg.on
     return self.cfg.on
+end
+
+function ESP:setNPCSource(fn)
+    self.npcSrc = type(fn) == "function" and fn or nil
+    return self
+end
+
+function ESP:setNPCLabel(fn)
+    self.npcLabel = type(fn) == "function" and fn or nil
+    return self
+end
+
+function ESP:npc(v)
+    self.cfg.npc.on = v and true or false
+    return self
 end
 
 function ESP:theme(nameOrTbl)
