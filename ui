@@ -1536,7 +1536,7 @@ function Widgets.color(win, id, opt)
     opt = opt or {}
     local row, t = makeRow(win, 24)
     label(row, opt.label or id or "Color", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(1, -100, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
-    local hexShell = makeField(row, t, UDim2.new(0, 60, 1, 0), UDim2.new(1, -32, 0.5, 0), Vector2.new(1, 0.5), row.ZIndex + 1)
+    local hexShell = makeField(row, t, UDim2.new(0, 90, 1, 0), UDim2.new(1, -32, 0.5, 0), Vector2.new(1, 0.5), row.ZIndex + 1)
     local hexBox = mk("TextBox", {
         Text = "",
         Font = Enum.Font.Code,
@@ -1546,7 +1546,7 @@ function Widgets.color(win, id, opt)
         ClearTextOnFocus = false,
         Size = UDim2.new(1, 0, 1, 0),
         TextXAlignment = Enum.TextXAlignment.Center,
-        PlaceholderText = "#FFFFFF",
+        PlaceholderText = "#FFF or 255,255,255",
         PlaceholderColor3 = t.dim,
         ZIndex = hexShell.ZIndex + 1,
     }, hexShell)
@@ -1719,7 +1719,8 @@ function Widgets.color(win, id, opt)
         end
     end))
     w:own(hexBox.FocusLost:Connect(function()
-        local c0 = parseHex(hexBox.Text)
+        local r, g, b = hexBox.Text:match("^%s*(%d+)%s*,%s*(%d+)%s*,%s*(%d+)%s*$")
+        local c0 = r and Color3.fromRGB(clamp(tonumber(r), 0, 255), clamp(tonumber(g), 0, 255), clamp(tonumber(b), 0, 255)) or parseHex(hexBox.Text)
         if c0 then
             w:set(c0)
         else

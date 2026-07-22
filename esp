@@ -424,6 +424,11 @@ local function defaults()
             pruneEvery = 90,
             fpsMin = 35,
             fpsMax = 144,
+            npcFrameSkip = 2,
+            npcBoxStep = 4,
+            entityStep = 3,
+            cullMax = 80,
+            cullMargin = 80,
         },
         box = {
             on = true,
@@ -1699,7 +1704,11 @@ function ESP:_snapNPC(out, eye)
     for k in pairs(seen) do
         seen[k] = nil
     end
+    local npcBoxStep = max(1, tonumber(ncfg.perf.npcBoxStep) or 4)
+    local cullMax = max(1, tonumber(ncfg.perf.cullMax) or 80)
+    local added = 0
     for i = 1, #list do
+        if added >= cullMax then break end
         local model = list[i]
         if typeof(model) == "Instance" and model.Parent then
             local hum = model:FindFirstChildOfClass("Humanoid")
@@ -1733,7 +1742,7 @@ function ESP:_snapNPC(out, eye)
                         end
                         local sx, sy, depth, on = self._proj(rootPart.Position)
                         local bx, by, bw, bh
-                        if on and depth > 0 then
+                        if on and depth > 0 and (self:_turn(rec.uid, npcBoxStep, 17) or not rec.box) then
                             local pivot, size = model:GetBoundingBox()
                             rec.pivot, rec.size = pivot, size
                             bx, by, bw, bh = box2d(pivot, size, self._proj)
@@ -1786,6 +1795,7 @@ function ESP:_snapNPC(out, eye)
                             rec = rec,
                             cfg = ncfg,
                         }
+                        added = added + 1
                     end
                 end
             end
@@ -2562,6 +2572,8 @@ function ESP:_ents()
     if not cam then
         return
     end
+    local entityStep = max(1, tonumber(self.cfg.perf.entityStep) or 3)
+    if self.frame % entityStep ~= 0 then return end
     local eye = cam.CFrame.Position
     local vp = cam.ViewportSize
 
@@ -2686,6 +2698,8 @@ function ESP:_cham(s)
             self:_clearCham(r)
             r.matKind = cfg.mat
         end
+        if r.matAt and self.frame - r.matAt < 20 and r.matKind == cfg.mat then return end
+        r.matAt = self.frame
         local map = r.mat or setmetatable({}, { __mode = "k" })
         r.mat = map
         for _, part in ipairs(s.char:GetDescendants()) do
@@ -2838,16 +2852,18 @@ function ESP:tick(dt)
         end
     end
 
+    local npcFrameSkip = max(1, tonumber(self.cfg.perf.npcFrameSkip) or 2)
     for i = 1, #self.snap do
         local s = self.snap[i]
-        self:_cham(s)
+        if not s.npc or self.frame % npcFrameSkip == 0 then self:_cham(s) end
     end
 
     self:_ents()
     self:_radar()
 
     for i = 1, #self.snap do
-        self:_player(self.snap[i])
+        local s = self.snap[i]
+        if not s.npc or self.frame % npcFrameSkip == 0 then self:_player(s) end
     end
 
     if self.cfg.arrow.on or self.cfg.npc.arrow.on then
