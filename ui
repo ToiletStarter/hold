@@ -2170,6 +2170,7 @@ function Window:_makeTabButton(parent, text, small)
 end
 
 function Window:Tab(id, title)
+    local win = self
     id = id or cleanName(title)
     if self.tabById[id] then
         return self.tabById[id]
@@ -2199,11 +2200,11 @@ function Window:Tab(id, title)
         return self.win:_add(widget)
     end
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        self.win:_refresh()
+        win:_refresh()
     end)
     btn.MouseButton1Click:Connect(function()
-        self.win.activeTab = tab
-        self.win:_refresh()
+        win.activeTab = tab
+        win:_refresh()
     end)
     self.tabs[#self.tabs + 1] = tab
     self.tabById[id] = tab
@@ -2215,6 +2216,8 @@ function Window:Tab(id, title)
 end
 
 function Tab:SubTab(id, title)
+    local tab = self
+    local win = self.win
     id = id or cleanName(title)
     if self.subtabById[id] then
         return self.subtabById[id]
@@ -2242,12 +2245,12 @@ function Tab:SubTab(id, title)
         return self.win:_add(widget)
     end
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        self.win:_refresh()
+        win:_refresh()
     end)
     btn.MouseButton1Click:Connect(function()
-        self.activeSub = sub
-        self.win.activeTab = self
-        self.win:_refresh()
+        tab.activeSub = sub
+        win.activeTab = tab
+        win:_refresh()
     end)
     self.subtabs[#self.subtabs + 1] = sub
     self.subtabById[id] = sub
