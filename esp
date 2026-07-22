@@ -11,7 +11,7 @@ local CAS = game:GetService("ContextActionService")
 
 local lp = Players.LocalPlayer
 local cam = workspace.CurrentCamera
-workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+local cameraConnection = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
     cam = workspace.CurrentCamera
 end)
 
@@ -1182,6 +1182,11 @@ function ESP.new(opt)
     end
 
     local self = setmetatable({}, ESP)
+    if not cameraConnection then
+        cameraConnection = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+            cam = workspace.CurrentCamera
+        end)
+    end
     self.cfg = defaults()
     if opt then
         merge(self.cfg, opt)
@@ -2887,6 +2892,10 @@ function ESP:destroy()
     self.flagOrder = {}
     self.snap = {}
     self.friends = {}
+    if #active == 0 and cameraConnection then
+        cameraConnection:Disconnect()
+        cameraConnection = nil
+    end
 end
 
 function ESP:on(v)
