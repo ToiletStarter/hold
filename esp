@@ -1240,6 +1240,7 @@ function ESP.new(opt)
     self.hooks = {}
     self.hookOrder = {}
     self.flags = {}
+    self.flagEnabled = {}
     self.flagOrder = {}
     self.ents = {}
     self.rings = {}
@@ -1956,7 +1957,7 @@ function ESP:_flagsDraw(s, x, y, w)
     local i = 0
     for _, name in ipairs(self.flagOrder) do
         local fn = self.flags[name]
-        if fn then
+        if fn and self.flagEnabled[name] ~= false then
             local ok, out = pcall(fn, s)
             if ok and out then
                 i = i + 1
@@ -2997,6 +2998,7 @@ function ESP:destroy()
     self.hooks = {}
     self.hookOrder = {}
     self.flags = {}
+    self.flagEnabled = {}
     self.flagOrder = {}
     self.snap = {}
     self.friends = {}
@@ -3279,11 +3281,20 @@ function ESP:flag(name, fn)
         insert(self.flagOrder, name)
     end
     self.flags[name] = fn
+    if self.flagEnabled[name] == nil then
+        self.flagEnabled[name] = true
+    end
     return fn
+end
+
+function ESP:setFlagEnabled(name, on)
+    self.flagEnabled[name] = not not on
+    return self
 end
 
 function ESP:dropFlag(name)
     self.flags[name] = nil
+    self.flagEnabled[name] = nil
     for i = #self.flagOrder, 1, -1 do
         if self.flagOrder[i] == name then
             remove(self.flagOrder, i)
