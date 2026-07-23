@@ -2312,6 +2312,7 @@ function Window:Tab(id, title)
         win:_refresh()
     end)
     btn.MouseButton1Click:Connect(function()
+        win.ui:_closePopup()
         win.activeTab = tab
         win:_refresh()
     end)
@@ -2357,6 +2358,7 @@ function Tab:SubTab(id, title)
         win:_refresh()
     end)
     btn.MouseButton1Click:Connect(function()
+        win.ui:_closePopup()
         tab.activeSub = sub
         win.activeTab = tab
         win:_refresh()
