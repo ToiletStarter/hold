@@ -463,6 +463,29 @@ function Router.new(ui)
             return
         end
 
+        if input.UserInputType == Enum.UserInputType.MouseButton2 and ui._openContext then
+            local pos = input.Position
+            for i = #ui.widgets, 1, -1 do
+                local w = ui.widgets[i]
+                local row = w and w.row
+                local shown = row and row.Parent ~= nil
+                local parent = row
+                while shown and parent do
+                    if parent:IsA("GuiObject") and not parent.Visible then shown=false end
+                    if parent:IsA("LayerCollector") and not parent.Enabled then shown=false end
+                    parent=parent.Parent
+                end
+                if shown then
+                    local p, s = row.AbsolutePosition, row.AbsoluteSize
+                    if pos.X >= p.X and pos.X <= p.X+s.X and pos.Y >= p.Y and pos.Y <= p.Y+s.Y then
+                        ui:_front(w.win)
+                        ui._openContext(w, row)
+                        return
+                    end
+                end
+            end
+        end
+
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == ui.menuKey and not gp then
             ui:Toggle()
             return
