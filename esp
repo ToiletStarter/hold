@@ -1105,7 +1105,7 @@ function Pool:txt(key, str, x, y, size, c, center, font, outline, a, z)
         rp(d, "Center", cen)
         s.center = cen
     end
-    local out = outline ~= false
+    local out = not self.noOutline and outline ~= false
     if s.outline ~= out then
         rp(d, "Outline", out)
         rp(d, "OutlineColor", BLACK)

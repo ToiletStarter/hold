@@ -1173,10 +1173,17 @@ function Widgets.slider(win, id, opt)
         w.step = 1
     end
     local span = max(0.0001, w.max - w.min)
+    local stepDecimals = 0
+    if w.step % 1 ~= 0 then
+        local frac = tostring(w.step):match("%.(%d+)")
+        stepDecimals = frac and math.min(4, #frac) or 2
+    end
+    local snapMult = 10 ^ stepDecimals
     local function snap(v)
         v = clamp(tonumber(v) or w.min, w.min, w.max)
         local s = w.step
-        return floor((v - w.min) / s + 0.5) * s + w.min
+        v = floor((v - w.min) / s + 0.5) * s + w.min
+        return floor(v * snapMult + 0.5) / snapMult
     end
     local function show(v)
         if type(opt.format) == "function" then
@@ -1185,10 +1192,10 @@ function Widgets.slider(win, id, opt)
         if opt.decimals then
             return string.format("%." .. tostring(opt.decimals) .. "f", v)
         end
-        if w.step % 1 == 0 then
+        if stepDecimals == 0 then
             return tostring(floor(v + 0.5))
         end
-        return tostring(v)
+        return string.format("%." .. stepDecimals .. "f", v)
     end
     function w:validate(v)
         return snap(v)
