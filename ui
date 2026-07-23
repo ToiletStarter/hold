@@ -1015,9 +1015,13 @@ end
 
 function Widgets.button(win, id, opt)
     opt = opt or {}
-    local row, t = makeRow(win, 28)
-    local shell = makeField(row, t, UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0.5, 0), Vector2.new(0, 0.5), row.ZIndex + 1)
-    local b = buttonText(shell, opt.text or opt.label or id or "Button", t, 12, shell.ZIndex + 1)
+    local compact = opt.compact and true or false
+    local row, t = makeRow(win, compact and 18 or 22)
+    local shell = makeField(row, t,
+        compact and UDim2.new(0, opt.width or 72, 0, 18) or UDim2.new(1, 0, 1, 0),
+        compact and UDim2.new(1, 0, 0.5, 0) or UDim2.new(0, 0, 0.5, 0),
+        compact and Vector2.new(1, 0.5) or Vector2.new(0, 0.5), row.ZIndex + 1)
+    local b = buttonText(shell, opt.text or opt.label or id or "Button", t, compact and 10 or 12, shell.ZIndex + 1)
     local w = Widget.new(win, id or cleanName(opt.text or "button"), "button", opt)
     local syncBind = makeBindChip(row, t, row.ZIndex + 3, 6, 52)
     w.row = row
@@ -1057,7 +1061,7 @@ end
 
 function Widgets.toggle(win, id, opt)
     opt = opt or {}
-    local row, t = makeRow(win, 20)
+    local row, t = makeRow(win, 18)
     local shell = mk("Frame", {
         Size = UDim2.new(0, 10, 0, 10),
         Position = UDim2.new(0, 0, 0.5, 0),
@@ -1077,7 +1081,7 @@ function Widgets.toggle(win, id, opt)
         ZIndex = shell.ZIndex + 1,
     }, shell)
     corner(4, fill)
-    local title = label(row, opt.label or id or "Toggle", t, 13, UDim2.new(0, 18, 0, 0), UDim2.new(1, -78, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    local title = label(row, opt.label or id or "Toggle", t, 12, UDim2.new(0, 18, 0, 0), UDim2.new(1, -78, 1, 0), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
     local hit = mk("TextButton", {
         Text = "",
         BackgroundTransparency = 1,
@@ -1127,9 +1131,9 @@ end
 
 function Widgets.slider(win, id, opt)
     opt = opt or {}
-    local row, t = makeRow(win, 38)
-    local title = label(row, opt.label or id or "Slider", t, 13, UDim2.new(0, 0, 0, 0), UDim2.new(0.5, 0, 0, 14), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
-    local valueLbl = label(row, "", t, 12, UDim2.new(0.5, 0, 0, 0), UDim2.new(0.5, -58, 0, 14), row.ZIndex + 1, Enum.TextXAlignment.Right, t.sub)
+    local row, t = makeRow(win, 32)
+    local title = label(row, opt.label or id or "Slider", t, 12, UDim2.new(0, 0, 0, 0), UDim2.new(0.5, 0, 0, 13), row.ZIndex + 1, Enum.TextXAlignment.Left, t.text)
+    local valueLbl = label(row, "", t, 11, UDim2.new(0.5, 0, 0, 0), UDim2.new(0.5, -58, 0, 13), row.ZIndex + 1, Enum.TextXAlignment.Right, t.sub)
     local track = makeField(row, t, UDim2.new(1, 0, 0, 8), UDim2.new(0, 0, 1, -4), Vector2.new(0, 1), row.ZIndex + 1)
     corner(3, track)
     local fill = mk("Frame", {
@@ -2238,7 +2242,7 @@ function Window:SetVisible(v)
 end
 
 function Window:_makeTabButton(parent, text, small)
-    local h = small and 18 or 20
+    local h = small and 17 or 18
     local shell = mk("Frame", {
         AutomaticSize = Enum.AutomaticSize.X,
         Size = UDim2.new(0, 0, 0, h),
@@ -2250,7 +2254,7 @@ function Window:_makeTabButton(parent, text, small)
     corner(small and 4 or 0, shell)
     local st = stroke(small and self.ui.theme.line or self.ui.theme.bg1, 1, 0, shell)
     if not small then st.Transparency = 1 end
-    pad(0, 0, small and 8 or 2, small and 8 or 2, shell)
+    pad(0, 0, small and 6 or 4, small and 6 or 4, shell)
     local fill = mk("Frame", {
         Size = small and UDim2.new(1, 0, 1, 0) or UDim2.new(1, -4, 0, 2),
         Position = small and UDim2.new(0, 0, 0, 0) or UDim2.new(0, 2, 1, -2),
@@ -2267,7 +2271,7 @@ function Window:_makeTabButton(parent, text, small)
         AutoButtonColor = false,
         Text = tostring(text or "Tab"),
         Font = Enum.Font.Gotham,
-        TextSize = small and 11 or 12,
+        TextSize = small and 10 or 11,
         TextColor3 = self.ui.theme.dim,
         ZIndex = shell.ZIndex + 2,
     }, shell)
