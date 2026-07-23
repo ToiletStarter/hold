@@ -400,6 +400,14 @@ local function defaults()
         on = false,
         maxRange = 3000,
         espRange = 3000,
+        -- render priority: higher draws over lower. entity groups can override via spec.priority.
+        priority = {
+            scale = 100,
+            player = 5,
+            walker = 4,
+            entity = 2,
+            hud = 9,
+        },
         team = false,
         rainbow = false,
         rainbowRate = 1,
@@ -803,6 +811,7 @@ function Pool.new()
         idle = {},
         frame = 0,
         size = 0,
+        zbias = 0,
     }, Pool)
 end
 
@@ -902,6 +911,7 @@ end
 
 function Pool:line(key, ax, ay, bx, by, c, w, a, z)
     local d, s = self:get(key, "Line")
+    if self.zbias ~= 0 then z = (z or 0) + self.zbias end
     c = col(c, WHITE)
     if not s.vis then
         rp(d, "Visible", true)
@@ -938,6 +948,7 @@ end
 
 function Pool:box(key, x, y, w, h, c, fill0, thick, a, z)
     local d, s = self:get(key, "Square")
+    if self.zbias ~= 0 then z = (z or 0) + self.zbias end
     c = col(c, WHITE)
     if not s.vis then
         rp(d, "Visible", true)
@@ -979,6 +990,7 @@ end
 
 function Pool:dot(key, x, y, r, c, fill0, a, sides, z, thick)
     local d, s = self:get(key, "Circle")
+    if self.zbias ~= 0 then z = (z or 0) + self.zbias end
     c = col(c, WHITE)
     if not s.vis then
         rp(d, "Visible", true)
@@ -1025,6 +1037,7 @@ end
 
 function Pool:tri(key, ax, ay, bx, by, cx, cy, c, a, z)
     local d, s = self:get(key, "Triangle")
+    if self.zbias ~= 0 then z = (z or 0) + self.zbias end
     c = col(c, WHITE)
     if not s.vis then
         rp(d, "Visible", true)
@@ -1064,6 +1077,7 @@ end
 
 function Pool:txt(key, str, x, y, size, c, center, font, outline, a, z)
     local d, s = self:get(key, "Text")
+    if self.zbias ~= 0 then z = (z or 0) + self.zbias end
     c = col(c, WHITE)
     if not s.vis then
         rp(d, "Visible", true)
@@ -2252,6 +2266,12 @@ function ESP:_radar()
     if cfg.border then
         self.pool:dot("rad_bo", cx, cy, r, cfg.col, false, 0.9, 48, nil, 1)
     end
+    if cfg.ringLabels ~= false then
+        local ls = cfg.size or 11
+        self.pool:dot("rad_r1", cx, cy, r * 0.5, cfg.col, false, 0.25, 40, nil, 1)
+        self.pool:txt("rad_rl0", floor(cfg.range) .. "m", cx, cy - r + 1, ls, cfg.col, true, FONT, true)
+        self.pool:txt("rad_rl1", floor(cfg.range * 0.5) .. "m", cx, cy - r * 0.5 + 1, ls, cfg.col, true, FONT, true)
+    end
     self.pool:dot("rad_me", cx, cy, cfg.blip + 1, cfg.selfCol, true, 1, 10)
 
     local look = cam.CFrame.LookVector
@@ -2628,7 +2648,9 @@ function ESP:_ents()
         end
     end
 
+    local pri = self.cfg.priority
     for id, e in pairs(self.ents) do
+        self.pool.zbias = pri and ((e.priority or pri.entity or 1) * (pri.scale or 100)) or 0
         local obj = e.get()
         if obj then
             if typeof(obj) == "table" then
@@ -2640,6 +2662,7 @@ function ESP:_ents()
             end
         end
     end
+    self.pool.zbias = 0
 end
 
 function ESP:_clearCham(r)
@@ -2859,13 +2882,21 @@ function ESP:tick(dt)
     end
 
     self:_ents()
+
+    local pri = self.cfg.priority
+    local scale = pri and (pri.scale or 100) or 0
+    self.pool.zbias = pri and ((pri.hud or 9) * scale) or 0
     self:_radar()
 
     for i = 1, #self.snap do
         local s = self.snap[i]
-        if not s.npc or self.frame % npcFrameSkip == 0 then self:_player(s) end
+        if not s.npc or self.frame % npcFrameSkip == 0 then
+            self.pool.zbias = pri and ((s.npc and (pri.walker or 4) or (pri.player or 5)) * scale) or 0
+            self:_player(s)
+        end
     end
 
+    self.pool.zbias = pri and ((pri.hud or 9) * scale) or 0
     if self.cfg.arrow.on or self.cfg.npc.arrow.on then
         for i = 1, #self.snap do
             self:_arrow(self.snap[i])
@@ -2876,6 +2907,7 @@ function ESP:tick(dt)
     self:_threat()
     self:_list()
     self:_self()
+    self.pool.zbias = 0
 
     for _, name in ipairs(self.modOrder) do
         local m = self.mods[name]

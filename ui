@@ -447,13 +447,15 @@ function Router.new(ui)
             return
         end
 
-        if ui._bindWidget and input.UserInputType == Enum.UserInputType.Keyboard then
+        if ui._bindWidget and (input.UserInputType == Enum.UserInputType.Keyboard or mouseKeys[input.UserInputType]) then
             local w = ui._bindWidget
             ui._bindWidget = nil
             if input.KeyCode == Enum.KeyCode.Escape then
                 if w.setBind then w:setBind(nil) end
-            else
+            elseif input.UserInputType == Enum.UserInputType.Keyboard then
                 if w.setBind then w:setBind(input.KeyCode) end
+            else
+                if w.setBind then w:setBind(input.UserInputType) end
             end
             if w.render then
                 w:render(w.value)
@@ -470,6 +472,15 @@ function Router.new(ui)
             for i = 1, #ui.widgets do
                 local w = ui.widgets[i]
                 if w and w.bindKey and w.activate and input.KeyCode == w.bindKey then
+                    safe(w.activate, w, input)
+                end
+            end
+        end
+
+        if mouseKeys[input.UserInputType] and not gp then
+            for i = 1, #ui.widgets do
+                local w = ui.widgets[i]
+                if w and w.activate and w.bindKey == input.UserInputType then
                     safe(w.activate, w, input)
                 end
             end
@@ -849,12 +860,67 @@ local function buttonText(parent, text, theme, size, z)
     return b
 end
 
+-- add a custom item to a widget's right-click context menu.
+-- text/fn/opt.state/opt.close; opt.state(w) returns a bool to show an on/off dot.
+function Widget:AddContext(text, fn, opt)
+    self._ctx = self._ctx or {}
+    self._ctx[#self._ctx + 1] = { text = text, fn = fn, state = opt and opt.state, close = opt and opt.close }
+    return self
+end
+
+local function openContext(w, target)
+    local ui = w.ui
+    ui:_closePopup()
+    local items = {}
+    if w.kind ~= "label" and w.kind ~= "section" then
+        items[#items + 1] = {
+            text = function() return w.bindKey and ("Set Keybind: " .. tostring(w.bindKey.Name):upper()) or "Set Keybind: [none]" end,
+            fn = function() w:beginBind(target or w.row) end,
+        }
+        if w.bindKey then
+            items[#items + 1] = { text = function() return "Clear Keybind" end, fn = function() if w.setBind then w:setBind(nil) end if w.render then w:render(w.value) end end }
+        end
+    end
+    for _, it in ipairs(w._ctx or {}) do items[#items + 1] = it end
+    if #items == 0 then return end
+
+    local rowH = 22
+    local frame = ui:_popup(target or w.row, Vector2.new(168, #items * rowH + 8))
+    frame.BackgroundColor3 = ui.theme.bg1
+    corner(6, frame); stroke(ui.theme.line, 1, 0, frame); pad(4, 4, 4, 4, frame)
+    mk("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }, frame)
+    for _, it in ipairs(items) do
+        local on = it.state and it.state(w)
+        local labelText = type(it.text) == "function" and it.text(w) or it.text
+        local cell = mk("TextButton", {
+            Text = "  " .. tostring(labelText) .. (it.state and (on and "   [ON]" or "   [OFF]") or ""),
+            Font = Enum.Font.Gotham, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
+            TextColor3 = (it.state and on) and ui.theme.accent or ui.theme.sub,
+            BackgroundColor3 = ui.theme.bg3, BackgroundTransparency = 1, AutoButtonColor = false,
+            Size = UDim2.new(1, 0, 0, rowH - 2), BorderSizePixel = 0, ZIndex = frame.ZIndex + 1,
+        }, frame)
+        corner(4, cell)
+        cell.MouseEnter:Connect(function() cell.BackgroundTransparency = 0 end)
+        cell.MouseLeave:Connect(function() cell.BackgroundTransparency = 1 end)
+        cell.MouseButton1Click:Connect(function()
+            safe(it.fn, w)
+            if it.close == false then
+                -- keep menu open; refresh labels by reopening
+                openContext(w, target)
+            else
+                ui:_closePopup()
+            end
+        end)
+    end
+end
+UI._openContext = openContext
+
 local function attachBind(w, gui, target)
     if not gui then return end
     gui.Active = true
     w:own(gui.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton2 then
-            w:beginBind(target or gui)
+            openContext(w, target or gui)
         end
     end))
 end
@@ -1785,8 +1851,12 @@ function Window:_activeTarget()
 end
 
 function Window:_layoutTabs()
-    local tabH = #self.tabs > 0 and 22 or 0
-    local subH = (self.activeTab and #self.activeTab.subtabs > 0) and 20 or 0
+    -- wrapped tab strips: height grows with the number of rows so tabs never run off-screen
+    local tabRows = self.tabList and math.ceil(self.tabList.AbsoluteContentSize.Y) or 0
+    local subRows = self.subList and math.ceil(self.subList.AbsoluteContentSize.Y) or 0
+    local tabH = #self.tabs > 0 and math.max(22, tabRows + 4) or 0
+    local subH = (self.activeTab and #self.activeTab.subtabs > 0) and math.max(20, subRows + 4) or 0
+    self._tabH, self._subH = tabH, subH
     self.tabBar.Visible = tabH > 0
     self.subBar.Visible = subH > 0
     self.tabBar.Size = UDim2.new(1, 0, 0, tabH)
@@ -1814,8 +1884,8 @@ function Window:_refresh()
     local active = self:_activeTarget()
     local full = (active.list and active.list.AbsoluteContentSize.Y or 0) + 12
     local show = clamp(full, 0, self.maxH)
-    local tabH = #self.tabs > 0 and 22 or 0
-    local subH = (self.activeTab and #self.activeTab.subtabs > 0) and 20 or 0
+    local tabH = self._tabH or (#self.tabs > 0 and 22 or 0)
+    local subH = self._subH or ((self.activeTab and #self.activeTab.subtabs > 0) and 20 or 0)
 
     self.body.Visible = active == self and self.open
     for i = 1, #self.tabs do
@@ -2882,6 +2952,7 @@ function UI:Window(id, title, opt)
         FillDirection = Enum.FillDirection.Horizontal,
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 4),
+        Wraps = true,
     }, tabBar)
     pad(4, 0, 6, 6, tabBar)
 
@@ -2897,6 +2968,7 @@ function UI:Window(id, title, opt)
         FillDirection = Enum.FillDirection.Horizontal,
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 4),
+        Wraps = true,
     }, subBar)
     pad(2, 0, 6, 6, subBar)
 
@@ -2931,6 +3003,12 @@ function UI:Window(id, title, opt)
     selfWin.list = list
 
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        selfWin:_refresh()
+    end)
+    tabList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        selfWin:_refresh()
+    end)
+    subList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         selfWin:_refresh()
     end)
     collapse.MouseButton1Click:Connect(function()
