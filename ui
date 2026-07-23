@@ -1897,6 +1897,12 @@ function Window:_refresh()
         tab.body.Visible = active == tab and self.open
         if tab.button then
             tab.button.TextColor3 = (self.activeTab == tab) and self.ui.theme.text or self.ui.theme.dim
+            if tab.buttonShell then
+                tab.buttonShell.BackgroundTransparency = (self.activeTab == tab) and 0 or 0.45
+                if tab.buttonShell:FindFirstChildOfClass("UIStroke") then
+                    tab.buttonShell.UIStroke.Color = (self.activeTab == tab) and self.ui.theme.lineHi or self.ui.theme.line
+                end
+            end
             if tab.fill then
                 tab.fill.BackgroundTransparency = (self.activeTab == tab) and 0 or 1
                 tab.fill.BackgroundColor3 = self.ui.theme.accent
@@ -1910,6 +1916,9 @@ function Window:_refresh()
             end
             if sub.button then
                 sub.button.TextColor3 = (tab.activeSub == sub) and self.ui.theme.text or self.ui.theme.dim
+                if sub.buttonShell and sub.buttonShell:FindFirstChildOfClass("UIStroke") then
+                    sub.buttonShell.UIStroke.Color = (tab.activeSub == sub) and self.ui.theme.lineHi or self.ui.theme.line
+                end
                 if sub.fill then
                     sub.fill.BackgroundTransparency = (tab.activeSub == sub) and 0.25 or 1
                     sub.fill.BackgroundColor3 = self.ui.theme.accentSoft
