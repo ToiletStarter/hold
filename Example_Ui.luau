@@ -1,63 +1,81 @@
---!nocheck
-local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/EasyUi_Source.luau"))()
-local Theme = UI.Toolkit.Theme
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/EasyUiTesting.luau"))()
+local EasyESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/ToiletStarter/hold/refs/heads/main/esp"))()
 
-local M = UI.new({ title = "EasyUI", toggleKey = Enum.KeyCode.RightShift })
+local M = UI.new({
+	title = "EasyUI Testing",
+	toggleKey = Enum.KeyCode.RightShift,
+	loadTime = 1.2,
+	watermark = true,
+	cursor = true,
+	keybindHud = true,
+})
 
-local aim = M:Tab("Aiming")
-local a = aim:Section("Aimbot")
-a:Toggle({ text = "Enabled", flag = "aim.on", default = true, context = function(sec)
-	sec:Dropdown({ text = "Mode", options = { "Silent", "Assist", "Lock" }, default = "Silent" })
-	sec:Slider({ text = "FOV", min = 0, max = 500, default = 120 })
-	sec:Colorpicker({ text = "FOV Color", default = Theme.Accent })
-end })
-a:Dropdown({ text = "Hit Part", options = { "Head", "Torso", "Nearest" }, default = "Head", flag = "aim.part" })
-a:Slider({ text = "Smoothing", min = 0, max = 100, default = 45, flag = "aim.smooth" })
-a:Keybind({ text = "Aim Key", default = Enum.KeyCode.E })
-a:Badge("Ready", "ok")
-local p = aim:Section("Prediction")
-p:Toggle({ text = "Resolver" })
-p:Slider({ text = "Bullet Drop", min = 0, max = 5, step = 0.05, decimals = 2, default = 1.2 })
+local main = M:Tab("Main")
+local combat = main:SubTab("Combat")
+local aiming = combat:SubTab("Aiming")
+local section = aiming:Section("Controls")
 
-local vis = M:Tab("Visuals")
-local box = vis:Section("Players")
-box:Toggle({ text = "Box ESP", default = true })
-box:Toggle({ text = "Name" })
-box:Toggle({ text = "Health Bar", default = true })
-box:Colorpicker({ text = "Box Color", default = Theme.Accent })
-box:Divider()
-box:Badge("Right-click any toggle", "info")
+section:Toggle({
+	text = "Enabled",
+	flag = "demo.enabled",
+	default = true,
+	context = function(context)
+		context:Slider({ text = "FOV", flag = "demo.fov", min = 20, max = 500, default = 120 })
+		context:Dropdown({ text = "Mode", flag = "demo.mode", options = { "Silent", "Assist", "Lock" }, default = "Silent" })
+		context:Colorpicker({ text = "Color", flag = "demo.color", default = UI.Toolkit.Theme.Accent })
+	end,
+})
+section:Slider({ text = "Smoothing", flag = "demo.smoothing", min = 0, max = 100, default = 45 })
+section:Textbox({ text = "Target Name", flag = "demo.target", placeholder = "player..." })
 
-local world = M:Tab("World")
-local wsec = world:Section("Environment")
-wsec:Toggle({ text = "Fullbright" })
-wsec:Slider({ text = "Brightness", min = 0, max = 5, step = 0.1, decimals = 1, default = 2 })
-wsec:Textbox({ text = "Waypoint", placeholder = "name...", flag = "world.wp" })
-wsec:Button({ text = "Create Waypoint", callback = function()
-	M:Notify({ title = "Waypoint", text = "Saved: " .. tostring(M:Get("world.wp")), kind = "ok" })
+local tools = M:Window("Tools", {
+	x = 700,
+	y = 120,
+	width = 380,
+	height = 330,
+	style = "panel",
+	header = "Runtime Tools",
+	open = false,
+	flag = "windows.tools",
+})
+local runtime = tools:Tab("Runtime"):Section("Queue")
+runtime:Button({ text = "Run Budgeted Batch", callback = function()
+	local work = table.create(1000, 0)
+	M:Batch("example", work, function(_, index)
+		work[index] = index * 2
+	end, {
+		interval = 0.01,
+		budget = 0.002,
+		chunk = 100,
+		done = function()
+			M:Notify({ title = "Runtime", text = "Processed 1,000 items.", kind = "ok" })
+		end,
+	})
+end })
+runtime:Button({ text = "Close Tools", callback = function() tools:Close() end })
+
+local mediaTab = tools:Tab("Media")
+local mediaSection = mediaTab:Section("Thumbnail")
+local mediaLoaded = false
+
+section:Button({ text = "Open Runtime Tools", callback = function() tools:Open() end })
+section:Button({ text = "Load YouTube Thumbnail", callback = function()
+	if not mediaLoaded then
+		mediaLoaded = true
+		mediaSection:Media("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { height = 160 })
+	end
+	mediaTab:Open()
+	tools:Open()
 end })
 
-local cfg = M:Tab("Config")
-local c = cfg:Section("Style")
-c:Dropdown({ text = "Widgets", options = { "Watermark, Keybinds", "Watermark", "Keybinds" }, default = "Watermark, Keybinds" })
-c:Textbox({ text = "Username", placeholder = "pikachu" })
-c:Colorpicker({ text = "Accent color", default = Theme.Accent, callback = function(col)
-	M:SetAccent(col)
-end })
-local act = cfg:Section("Actions")
-act:Button({ text = "Toast: OK", callback = function()
-	M:Notify({ title = "EasyUI", text = "Everything nominal.", kind = "ok" })
-end })
-act:Button({ text = "Toast: Warn", callback = function()
-	M:Notify({ title = "Careful", text = "Something looks off.", kind = "warn" })
-end })
-act:Button({ text = "Toast: Error", callback = function()
-	M:Notify({ title = "Failed", text = "That did not work.", kind = "error" })
-end })
+M:HUD("Compass")
+M:ConfigTab()
 
-M:Preview()
-task.delay(0.4, function()
-	M:Notify({ title = "EasyUI", text = "Loaded. RightShift toggles. Right-click widgets for keybinds.", kind = "ok", duration = 6 })
+local esp = EasyESP.new()
+M:AttachESP(esp, { enabled = true, start = true, build = true, own = true, singleWindow = true })
+
+task.delay(1.5, function()
+	M:Notify({ title = "EasyUI", text = "Right-click controls for keybinds and mini settings.", kind = "info", duration = 6 })
 end)
 
 return M
