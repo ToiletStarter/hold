@@ -1395,6 +1395,8 @@ function ESP:_boot()
             hitDmg = 0,
             hp = 0,
             maxHp = 0,
+            hpCon = nil,
+            maxHpCon = nil,
             cham = nil,
             mat = nil,
             matKind = nil,
@@ -1406,6 +1408,8 @@ function ESP:_boot()
         local uid = plr.UserId
         local r = self.recs[uid]
         if r then
+            if r.hpCon then r.hpCon:Disconnect() end
+            if r.maxHpCon then r.maxHpCon:Disconnect() end
             self:_clearCham(r)
         end
         self.recs[uid] = nil
@@ -1490,6 +1494,8 @@ function ESP:_rec(r)
     local plr = r.plr
     local char = plr.Character
     if char ~= r.char then
+        if r.hpCon then r.hpCon:Disconnect(); r.hpCon=nil end
+        if r.maxHpCon then r.maxHpCon:Disconnect(); r.maxHpCon=nil end
         r.char = char
         r.hum = char and char:FindFirstChildOfClass("Humanoid") or nil
         r.root = char and char:FindFirstChild("HumanoidRootPart") or nil
@@ -1499,6 +1505,12 @@ function ESP:_rec(r)
         r.pivot = nil
         r.size = nil
         r.box = nil
+        if r.hum then
+            r.hp=r.hum.Health
+            r.maxHp=r.hum.MaxHealth
+            r.hpCon=r.hum.HealthChanged:Connect(function(hp) r.hp=hp end)
+            r.maxHpCon=r.hum:GetPropertyChangedSignal("MaxHealth"):Connect(function() r.maxHp=r.hum.MaxHealth end)
+        end
     else
         if char then
             if not r.hum or r.hum.Parent ~= char then
@@ -2933,7 +2945,14 @@ function ESP:start()
     end
     self.running = true
     self.loop = Run.RenderStepped:Connect(function(dt)
-        self:tick(dt)
+        local ok,err=pcall(self.tick,self,dt)
+        if not ok then
+            self._tickErrors=(self._tickErrors or 0)+1
+            if self._tickErrors==1 then warn("[EasyESP]",err) end
+            self.pool:reset()
+        else
+            self._tickErrors=0
+        end
     end)
     return self
 end
@@ -2986,6 +3005,10 @@ function ESP:destroy()
                 c:Disconnect()
             end)
         end
+    end
+    for _,r in pairs(self.recs) do
+        if r.hpCon then r.hpCon:Disconnect() end
+        if r.maxHpCon then r.maxHpCon:Disconnect() end
     end
     self.pool:nuke()
     self.recs = {}
