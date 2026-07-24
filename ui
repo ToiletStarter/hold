@@ -908,7 +908,7 @@ local function openContext(w, target)
     if #items == 0 then return end
 
     local rowH = 22
-    local frame = ui:_popup(target or w.row, Vector2.new(168, #items * rowH + 8))
+    local frame = ui:_openPopup(target or w.row, Vector2.new(168, #items * rowH + 8))
     frame.BackgroundColor3 = ui.theme.bg1
     corner(6, frame); stroke(ui.theme.line, 1, 0, frame); pad(4, 4, 4, 4, frame)
     mk("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }, frame)
@@ -1324,7 +1324,7 @@ function Widgets.dropdown(win, id, opt)
     end
     local function open()
         local theme = w.ui.theme
-        local frame = w.ui:_popup(shell, Vector2.new(140, max(26, #w.items * 22 + 8)))
+        local frame = w.ui:_openPopup(shell, Vector2.new(140, max(26, #w.items * 22 + 8)))
         frame.BackgroundColor3 = theme.bg1
         stroke(theme.line, 1, 0, frame)
         corner(6, frame)
@@ -1672,7 +1672,7 @@ function Widgets.color(win, id, opt)
     end
     local function open()
         local theme = w.ui.theme
-        local pop = w.ui:_popup(sw, Vector2.new(172, 124))
+        local pop = w.ui:_openPopup(sw, Vector2.new(172, 124))
         pop.BackgroundColor3 = theme.bg1
         corner(6, pop)
         stroke(theme.line, 1, 0, pop)
@@ -2645,7 +2645,7 @@ function UI:_refreshWatermark()
     self._wmLabel.TextColor3 = self.theme.text
 end
 
-function UI:_popup(owner, size)
+function UI:_openPopup(owner, size)
     self:_closePopup()
     local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1200, 800)
     local pos = owner.AbsolutePosition
