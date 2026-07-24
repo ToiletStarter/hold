@@ -1,5 +1,5 @@
 --!nocheck
--- Matcha UI — a clean, matte, black/white Roblox menu library.
+-- EasyUI UI — a clean, matte, black/white Roblox menu library.
 -- Execute this file directly to see the demo (bottom of file).
 
 local Players = game:GetService("Players")
@@ -161,7 +161,7 @@ end
 
 local function mountGui()
 	local root = new("ScreenGui", {
-		Name = "Matcha_" .. tostring(math.random(1e5, 9e5)),
+		Name = "EasyUI_" .. tostring(math.random(1e5, 9e5)),
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		IgnoreGuiInset = true,
@@ -214,15 +214,15 @@ end
 --==================================================================
 -- Library
 --==================================================================
-local Matcha = {}
-Matcha.__index = Matcha
+local EasyUI = {}
+EasyUI.__index = EasyUI
 
-function Matcha.new(opts)
+function EasyUI.new(opts)
 	opts = opts or {}
-	local self = setmetatable({}, Matcha)
+	local self = setmetatable({}, EasyUI)
 	self.gui = mountGui()
 	self.toggleKey = opts.toggleKey or Enum.KeyCode.RightShift
-	self.title = opts.title or "Matcha"
+	self.title = opts.title or "EasyUI"
 	self.tabs = {}
 	self.visible = true
 	if opts.accent then
@@ -334,22 +334,8 @@ function Matcha.new(opts)
 		Parent = win,
 	})
 	pad(12, side, 12, 6, 6, 12)
-	local sideList = list(side, 4)
+	list(side, 4)
 	self._side = side
-
-	local tabIndicator = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 30),
-		BackgroundColor3 = Theme.Control,
-		BackgroundTransparency = 0,
-		BorderSizePixel = 0,
-		ZIndex = 1,
-		Visible = false,
-		Parent = side,
-	})
-	corner(8, tabIndicator)
-	stroke(Theme.StrokeSoft, 1, 0, tabIndicator)
-	self._indicator = tabIndicator
-	sideList.LayoutOrder = 0
 
 	-- content holder
 	local content = new("Frame", {
@@ -416,7 +402,7 @@ function Matcha.new(opts)
 	return self
 end
 
-function Matcha:SetVisible(v)
+function EasyUI:SetVisible(v)
 	self.visible = v
 	if v then
 		self.window.Visible = true
@@ -435,11 +421,11 @@ function Matcha:SetVisible(v)
 	end
 end
 
-function Matcha:Minimize()
+function EasyUI:Minimize()
 	self:SetVisible(false)
 end
 
-function Matcha:Close()
+function EasyUI:Close()
 	tw(self._scale, E.Smooth, { Scale = 0.85 })
 	local t = tw(self.window, E.Smooth, { BackgroundTransparency = 1 })
 	t.Completed:Connect(function()
@@ -450,18 +436,21 @@ end
 --==================================================================
 -- Tabs
 --==================================================================
-function Matcha:Tab(name)
+function EasyUI:Tab(name)
 	local self_ = self
 	local btn = new("TextButton", {
 		Text = "",
 		AutoButtonColor = false,
 		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundColor3 = Theme.Control,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ZIndex = 2,
 		LayoutOrder = #self.tabs + 1,
 		Parent = self._side,
 	})
+	corner(8, btn)
+	local btnStroke = stroke(Theme.StrokeSoft, 1, 1, btn)
 	local tl = label(name, 13, Theme.Sub, Theme.Font, btn)
 	tl.Position = UDim2.new(0, 12, 0, 0)
 	tl.Size = UDim2.new(1, -12, 1, 0)
@@ -481,19 +470,20 @@ function Matcha:Tab(name)
 	pad(14, page, 14, 12, 14, 16)
 	list(page, 12)
 
-	local tab = { name = name, button = btn, page = page, label = tl }
+	local tab = { name = name, button = btn, stroke = btnStroke, page = page, label = tl }
 	self.tabs[#self.tabs + 1] = tab
 
 	local function activate()
 		for _, t in ipairs(self_.tabs) do
 			t.page.Visible = false
+			tw(t.button, E.Fast, { BackgroundTransparency = 1 })
+			tw(t.stroke, E.Fast, { Transparency = 1 })
 			tw(t.label, E.Fast, { TextColor3 = Theme.Sub })
 		end
 		page.Visible = true
+		tw(btn, E.Fast, { BackgroundTransparency = 0 })
+		tw(btnStroke, E.Fast, { Transparency = 0 })
 		tw(tl, E.Fast, { TextColor3 = Theme.Text })
-		local ind = self_._indicator
-		ind.Visible = true
-		tw(ind, E.Smooth, { Position = UDim2.new(0, 0, 0, btn.Position.Y.Offset) })
 	end
 	btn.MouseButton1Click:Connect(activate)
 	btn.MouseEnter:Connect(function()
@@ -508,18 +498,15 @@ function Matcha:Tab(name)
 	end)
 
 	if #self.tabs == 1 then
-		task.defer(function()
-			self._indicator.Position = UDim2.new(0, 0, 0, btn.Position.Y.Offset)
-			activate()
-		end)
+		task.defer(activate)
 	end
 
-	return setmetatable({ _m = self, _page = page }, { __index = Matcha._Tab })
+	return setmetatable({ _m = self, _page = page }, { __index = EasyUI._Tab })
 end
 
-Matcha._Tab = {}
+EasyUI._Tab = {}
 
-function Matcha._Tab:Section(title)
+function EasyUI._Tab:Section(title)
 	local card = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 40),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -534,13 +521,13 @@ function Matcha._Tab:Section(title)
 	local head = label(title, 13, Theme.Text, Theme.FontBold, card)
 	head.Size = UDim2.new(1, 0, 0, 18)
 	head.LayoutOrder = -1
-	return setmetatable({ _m = self._m, _card = card }, { __index = Matcha._Section })
+	return setmetatable({ _m = self._m, _card = card }, { __index = EasyUI._Section })
 end
 
 --==================================================================
 -- Widgets
 --==================================================================
-Matcha._Section = {}
+EasyUI._Section = {}
 
 local function row(parent, h)
 	return new("Frame", {
@@ -550,7 +537,7 @@ local function row(parent, h)
 	})
 end
 
-function Matcha._Section:Label(text)
+function EasyUI._Section:Label(text)
 	local l = label(text, 12, Theme.Sub, Theme.Font, self._card)
 	l.Size = UDim2.new(1, 0, 0, 16)
 	l.TextWrapped = true
@@ -558,7 +545,7 @@ function Matcha._Section:Label(text)
 	return l
 end
 
-function Matcha._Section:Toggle(o)
+function EasyUI._Section:Toggle(o)
 	o = o or {}
 	local state = o.default or false
 	local r = row(self._card, 28)
@@ -609,7 +596,7 @@ function Matcha._Section:Toggle(o)
 	return api
 end
 
-function Matcha._Section:Button(o)
+function EasyUI._Section:Button(o)
 	o = o or {}
 	local b = new("TextButton", {
 		Text = "",
@@ -635,7 +622,7 @@ function Matcha._Section:Button(o)
 	return b
 end
 
-function Matcha._Section:Slider(o)
+function EasyUI._Section:Slider(o)
 	o = o or {}
 	local min, max = o.min or 0, o.max or 100
 	local step = o.step or 1
@@ -729,7 +716,7 @@ function Matcha._Section:Slider(o)
 	return api
 end
 
-function Matcha._Section:Dropdown(o)
+function EasyUI._Section:Dropdown(o)
 	o = o or {}
 	local items = o.options or {}
 	local value = o.default or items[1]
@@ -841,7 +828,7 @@ function Matcha._Section:Dropdown(o)
 	return api
 end
 
-function Matcha._Section:Keybind(o)
+function EasyUI._Section:Keybind(o)
 	o = o or {}
 	local key = o.default
 	local capturing = false
@@ -889,7 +876,7 @@ function Matcha._Section:Keybind(o)
 	return { Get = function() return key end }
 end
 
-function Matcha._Section:Textbox(o)
+function EasyUI._Section:Textbox(o)
 	o = o or {}
 	local r = row(self._card, 30)
 	local box = new("TextBox", {
@@ -920,7 +907,7 @@ function Matcha._Section:Textbox(o)
 	return box
 end
 
-function Matcha._Section:Colorpicker(o)
+function EasyUI._Section:Colorpicker(o)
 	o = o or {}
 	local color = o.default or Theme.Accent
 	local r = row(self._card, 28)
@@ -1027,7 +1014,7 @@ end
 --==================================================================
 -- Toasts / notifications
 --==================================================================
-function Matcha:Notify(o)
+function EasyUI:Notify(o)
 	o = o or {}
 	local dur = o.duration or 4
 	local kindColor = ({ ok = Theme.Good, warn = Theme.Warn, error = Theme.Bad })[o.kind] or Theme.Accent
@@ -1093,7 +1080,7 @@ end
 --==================================================================
 -- ESP Preview (viewport with a rig + overlay box)
 --==================================================================
-function Matcha:ESPPreview(opts)
+function EasyUI:ESPPreview(opts)
 	opts = opts or {}
 	local w, h = 220, 300
 	local win = new("Frame", {
@@ -1107,7 +1094,7 @@ function Matcha:ESPPreview(opts)
 	stroke(Theme.Stroke, 1, 0.2, win)
 	local bar = new("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, Parent = win })
 	draggable(bar, win)
-	local t = label((self.title or "Matcha") .. " — ESP Preview", 12, Theme.Sub, Theme.FontMono, bar)
+	local t = label((self.title or "EasyUI") .. " — ESP Preview", 12, Theme.Sub, Theme.FontMono, bar)
 	t.Position = UDim2.new(0, 14, 0, 0)
 	t.Size = UDim2.new(1, -20, 1, 0)
 
@@ -1207,7 +1194,7 @@ end
 -- DEMO — runs on execute
 --==================================================================
 local function demo()
-	local UI = Matcha.new({ title = "Matcha", toggleKey = Enum.KeyCode.RightShift })
+	local UI = EasyUI.new({ title = "EasyUI", toggleKey = Enum.KeyCode.RightShift })
 
 	-- Aiming
 	do
@@ -1261,7 +1248,7 @@ local function demo()
 		c:Slider({ text = "UI Scale", min = 80, max = 120, default = 100 })
 		local a = tab:Section("Actions")
 		a:Button({ text = "Notify Test", callback = function()
-			UI:Notify({ title = "Matcha", text = "This is a toast notification.", kind = "ok" })
+			UI:Notify({ title = "EasyUI", text = "This is a toast notification.", kind = "ok" })
 		end })
 		a:Button({ text = "Warn Test", callback = function()
 			UI:Notify({ title = "Careful", text = "Something might be off.", kind = "warn" })
@@ -1270,11 +1257,11 @@ local function demo()
 
 	UI:ESPPreview()
 	task.delay(0.4, function()
-		UI:Notify({ title = "Matcha", text = "UI loaded. Press RightShift to toggle.", kind = "ok", duration = 5 })
+		UI:Notify({ title = "EasyUI", text = "UI loaded. Press RightShift to toggle.", kind = "ok", duration = 5 })
 	end)
 
 	return UI
 end
 
 demo()
-return Matcha
+return EasyUI
