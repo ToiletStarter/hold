@@ -1,0 +1,1280 @@
+--!nocheck
+-- Matcha UI — a clean, matte, black/white Roblox menu library.
+-- Execute this file directly to see the demo (bottom of file).
+
+local Players = game:GetService("Players")
+local UserInput = game:GetService("UserInputService")
+local Tween = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+local LP = Players.LocalPlayer
+local Mouse = LP and LP:GetMouse()
+
+--==================================================================
+-- Theme
+--==================================================================
+local Theme = {
+	Font = Enum.Font.GothamMedium,
+	FontBold = Enum.Font.GothamBold,
+	FontMono = Enum.Font.Code,
+
+	Accent = Color3.fromRGB(236, 236, 240),
+	AccentSoft = Color3.fromRGB(150, 150, 158),
+
+	Window = Color3.fromRGB(15, 15, 17),
+	Panel = Color3.fromRGB(21, 21, 24),
+	Card = Color3.fromRGB(27, 27, 31),
+	Control = Color3.fromRGB(33, 33, 38),
+	Hover = Color3.fromRGB(42, 42, 48),
+
+	Stroke = Color3.fromRGB(46, 46, 53),
+	StrokeSoft = Color3.fromRGB(36, 36, 42),
+
+	Text = Color3.fromRGB(240, 240, 245),
+	Sub = Color3.fromRGB(150, 150, 160),
+	Muted = Color3.fromRGB(96, 96, 106),
+
+	Good = Color3.fromRGB(172, 226, 191),
+	Warn = Color3.fromRGB(240, 214, 168),
+	Bad = Color3.fromRGB(240, 172, 178),
+}
+
+--==================================================================
+-- Easing presets (Apple-ish)
+--==================================================================
+local E = {
+	Smooth = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+	Fast = TweenInfo.new(0.12, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+	Snap = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+	Pop = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+	Linear = TweenInfo.new(0.15, Enum.EasingStyle.Linear),
+}
+
+--==================================================================
+-- Low-level helpers
+--==================================================================
+local function new(class, props, children)
+	local inst = Instance.new(class)
+	if props then
+		for k, v in pairs(props) do
+			if k ~= "Parent" then
+				inst[k] = v
+			end
+		end
+	end
+	if children then
+		for _, c in ipairs(children) do
+			c.Parent = inst
+		end
+	end
+	if props and props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+local function tw(inst, info, props)
+	local t = Tween:Create(inst, info, props)
+	t:Play()
+	return t
+end
+
+local function corner(radius, parent)
+	return new("UICorner", { CornerRadius = UDim.new(0, radius or 8), Parent = parent })
+end
+
+local function stroke(color, thickness, transparency, parent)
+	return new("UIStroke", {
+		Color = color or Theme.Stroke,
+		Thickness = thickness or 1,
+		Transparency = transparency or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = parent,
+	})
+end
+
+local function pad(all, parent, l, t, r, b)
+	return new("UIPadding", {
+		PaddingLeft = UDim.new(0, l or all),
+		PaddingRight = UDim.new(0, r or all),
+		PaddingTop = UDim.new(0, t or all),
+		PaddingBottom = UDim.new(0, b or all),
+		Parent = parent,
+	})
+end
+
+local function list(parent, gap, dir)
+	return new("UIListLayout", {
+		FillDirection = dir or Enum.FillDirection.Vertical,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, gap or 6),
+		Parent = parent,
+	})
+end
+
+local function label(text, size, color, font, parent)
+	return new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = text or "",
+		TextSize = size or 13,
+		TextColor3 = color or Theme.Text,
+		Font = font or Theme.Font,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		RichText = true,
+		Parent = parent,
+	})
+end
+
+-- ripple feedback on a button surface
+local function ripple(parent)
+	local circle = new("Frame", {
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 0.86,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(0, 0),
+		Position = UDim2.fromScale(0.5, 0.5),
+		ZIndex = 20,
+		Parent = parent,
+	})
+	corner(999, circle)
+	local sz = math.max(parent.AbsoluteSize.X, parent.AbsoluteSize.Y) * 1.6
+	tw(circle, TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+		Size = UDim2.fromOffset(sz, sz),
+		BackgroundTransparency = 1,
+	})
+	task.delay(0.46, function()
+		circle:Destroy()
+	end)
+end
+
+local function hoverable(inst, base, hover)
+	inst.MouseEnter:Connect(function()
+		tw(inst, E.Fast, { BackgroundColor3 = hover })
+	end)
+	inst.MouseLeave:Connect(function()
+		tw(inst, E.Fast, { BackgroundColor3 = base })
+	end)
+end
+
+local function mountGui()
+	local root = new("ScreenGui", {
+		Name = "Matcha_" .. tostring(math.random(1e5, 9e5)),
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		IgnoreGuiInset = true,
+	})
+	local ok = pcall(function()
+		if syn and syn.protect_gui then
+			syn.protect_gui(root)
+			root.Parent = CoreGui
+		elseif gethui then
+			root.Parent = gethui()
+		else
+			root.Parent = CoreGui
+		end
+	end)
+	if not ok or not root.Parent then
+		root.Parent = LP and LP:WaitForChild("PlayerGui") or CoreGui
+	end
+	return root
+end
+
+--==================================================================
+-- Draggable
+--==================================================================
+local function draggable(handle, target)
+	local dragging, startInput, startPos
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			startInput = i.Position
+			startPos = target.Position
+			local conn
+			conn = i.Changed:Connect(function()
+				if i.UserInputState == Enum.UserInputState.End then
+					dragging = false
+					conn:Disconnect()
+				end
+			end)
+		end
+	end)
+	UserInput.InputChanged:Connect(function(i)
+		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			local d = i.Position - startInput
+			tw(target, TweenInfo.new(0.05, Enum.EasingStyle.Linear), {
+				Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y),
+			})
+		end
+	end)
+end
+
+--==================================================================
+-- Library
+--==================================================================
+local Matcha = {}
+Matcha.__index = Matcha
+
+function Matcha.new(opts)
+	opts = opts or {}
+	local self = setmetatable({}, Matcha)
+	self.gui = mountGui()
+	self.toggleKey = opts.toggleKey or Enum.KeyCode.RightShift
+	self.title = opts.title or "Matcha"
+	self.tabs = {}
+	self.visible = true
+	if opts.accent then
+		Theme.Accent = opts.accent
+	end
+
+	local width = opts.width or 560
+	local height = opts.height or 420
+
+	local win = new("Frame", {
+		Name = "Window",
+		Size = UDim2.fromOffset(width, height),
+		Position = UDim2.new(0.5, -width / 2, 0.5, -height / 2),
+		BackgroundColor3 = Theme.Window,
+		BorderSizePixel = 0,
+		Parent = self.gui,
+	})
+	corner(12, win)
+	stroke(Theme.Stroke, 1, 0.2, win)
+	self.window = win
+
+	-- soft drop shadow
+	new("ImageLabel", {
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://5554236805",
+		ImageColor3 = Color3.new(0, 0, 0),
+		ImageTransparency = 0.45,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(23, 23, 277, 277),
+		Size = UDim2.new(1, 60, 1, 60),
+		Position = UDim2.new(0, -30, 0, -30),
+		ZIndex = 0,
+		Parent = win,
+	})
+
+	local scale = new("UIScale", { Scale = 1, Parent = win })
+	self._scale = scale
+
+	-- title bar
+	local bar = new("Frame", {
+		Name = "TitleBar",
+		Size = UDim2.new(1, 0, 0, 42),
+		BackgroundTransparency = 1,
+		Parent = win,
+	})
+	draggable(bar, win)
+	local dot = new("Frame", {
+		Size = UDim2.fromOffset(9, 9),
+		Position = UDim2.new(0, 16, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = Theme.Accent,
+		BorderSizePixel = 0,
+		Parent = bar,
+	})
+	corner(999, dot)
+	local titleLbl = label(self.title, 14, Theme.Text, Theme.FontBold, bar)
+	titleLbl.Position = UDim2.new(0, 34, 0, 0)
+	titleLbl.Size = UDim2.new(1, -120, 1, 0)
+
+	-- close / minimize pills
+	local function pill(x, color, cb)
+		local b = new("TextButton", {
+			Text = "",
+			AutoButtonColor = false,
+			Size = UDim2.fromOffset(24, 24),
+			Position = UDim2.new(1, x, 0.5, 0),
+			AnchorPoint = Vector2.new(1, 0.5),
+			BackgroundColor3 = Theme.Control,
+			BorderSizePixel = 0,
+			Parent = bar,
+		})
+		corner(7, b)
+		stroke(Theme.StrokeSoft, 1, 0, b)
+		local ic = new("Frame", {
+			Size = UDim2.fromOffset(9, 2),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			Parent = b,
+		})
+		corner(2, ic)
+		hoverable(b, Theme.Control, Theme.Hover)
+		b.MouseButton1Click:Connect(cb)
+		return b, ic
+	end
+	pill(-14, Theme.Bad, function()
+		self:Close()
+	end)
+	local _, minIc = pill(-44, Theme.Sub, function()
+		self:Minimize()
+	end)
+	self._minIc = minIc
+
+	new("Frame", {
+		Size = UDim2.new(1, -32, 0, 1),
+		Position = UDim2.new(0, 16, 0, 42),
+		BackgroundColor3 = Theme.StrokeSoft,
+		BorderSizePixel = 0,
+		Parent = win,
+	})
+
+	-- sidebar
+	local side = new("Frame", {
+		Name = "Sidebar",
+		Size = UDim2.new(0, 150, 1, -54),
+		Position = UDim2.new(0, 0, 0, 50),
+		BackgroundTransparency = 1,
+		Parent = win,
+	})
+	pad(12, side, 12, 6, 6, 12)
+	local sideList = list(side, 4)
+	self._side = side
+
+	local tabIndicator = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundColor3 = Theme.Control,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		ZIndex = 1,
+		Visible = false,
+		Parent = side,
+	})
+	corner(8, tabIndicator)
+	stroke(Theme.StrokeSoft, 1, 0, tabIndicator)
+	self._indicator = tabIndicator
+	sideList.LayoutOrder = 0
+
+	-- content holder
+	local content = new("Frame", {
+		Name = "Content",
+		Size = UDim2.new(1, -150, 1, -54),
+		Position = UDim2.new(0, 150, 0, 50),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Parent = win,
+	})
+	self._content = content
+
+	-- watermark pill (top-right corner of screen)
+	local wm = new("Frame", {
+		Size = UDim2.fromOffset(160, 26),
+		Position = UDim2.new(0, 16, 0, 16),
+		BackgroundColor3 = Theme.Panel,
+		BorderSizePixel = 0,
+		Parent = self.gui,
+	})
+	corner(8, wm)
+	stroke(Theme.Stroke, 1, 0.1, wm)
+	draggable(wm, wm)
+	local wmText = label(self.title .. "  •  0 fps", 12, Theme.Sub, Theme.FontMono, wm)
+	wmText.Position = UDim2.new(0, 10, 0, 0)
+	wmText.Size = UDim2.new(1, -20, 1, 0)
+	self._wmText = wmText
+	self.watermark = opts.watermark ~= false
+	wm.Visible = self.watermark
+
+	-- fps in watermark
+	do
+		local acc, frames = 0, 0
+		RunService.RenderStepped:Connect(function(dt)
+			acc += dt
+			frames += 1
+			if acc >= 0.5 then
+				local fps = math.floor(frames / acc + 0.5)
+				acc, frames = 0, 0
+				if wmText and wmText.Parent then
+					wmText.Text = self.title .. "  •  " .. fps .. " fps"
+				end
+			end
+		end)
+	end
+
+	-- open animation
+	scale.Scale = 0.9
+	win.BackgroundTransparency = 1
+	tw(win, E.Pop, { BackgroundTransparency = 0 })
+	tw(scale, E.Pop, { Scale = 1 })
+
+	-- toggle key
+	UserInput.InputBegan:Connect(function(i, gp)
+		if gp then
+			return
+		end
+		if i.KeyCode == self.toggleKey then
+			self:SetVisible(not self.visible)
+		end
+	end)
+
+	self._toasts = {}
+	return self
+end
+
+function Matcha:SetVisible(v)
+	self.visible = v
+	if v then
+		self.window.Visible = true
+		self._scale.Scale = 0.92
+		self.window.BackgroundTransparency = 1
+		tw(self.window, E.Pop, { BackgroundTransparency = 0 })
+		tw(self._scale, E.Pop, { Scale = 1 })
+	else
+		tw(self._scale, E.Smooth, { Scale = 0.92 })
+		local t = tw(self.window, E.Smooth, { BackgroundTransparency = 1 })
+		t.Completed:Connect(function()
+			if not self.visible then
+				self.window.Visible = false
+			end
+		end)
+	end
+end
+
+function Matcha:Minimize()
+	self:SetVisible(false)
+end
+
+function Matcha:Close()
+	tw(self._scale, E.Smooth, { Scale = 0.85 })
+	local t = tw(self.window, E.Smooth, { BackgroundTransparency = 1 })
+	t.Completed:Connect(function()
+		self.gui:Destroy()
+	end)
+end
+
+--==================================================================
+-- Tabs
+--==================================================================
+function Matcha:Tab(name)
+	local self_ = self
+	local btn = new("TextButton", {
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+		LayoutOrder = #self.tabs + 1,
+		Parent = self._side,
+	})
+	local tl = label(name, 13, Theme.Sub, Theme.Font, btn)
+	tl.Position = UDim2.new(0, 12, 0, 0)
+	tl.Size = UDim2.new(1, -12, 1, 0)
+	tl.ZIndex = 3
+
+	local page = new("ScrollingFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = Theme.Stroke,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticCanvasSize.Y,
+		Visible = false,
+		Parent = self._content,
+	})
+	pad(14, page, 14, 12, 14, 16)
+	list(page, 12)
+
+	local tab = { name = name, button = btn, page = page, label = tl }
+	self.tabs[#self.tabs + 1] = tab
+
+	local function activate()
+		for _, t in ipairs(self_.tabs) do
+			t.page.Visible = false
+			tw(t.label, E.Fast, { TextColor3 = Theme.Sub })
+		end
+		page.Visible = true
+		tw(tl, E.Fast, { TextColor3 = Theme.Text })
+		local ind = self_._indicator
+		ind.Visible = true
+		tw(ind, E.Smooth, { Position = UDim2.new(0, 0, 0, btn.Position.Y.Offset) })
+	end
+	btn.MouseButton1Click:Connect(activate)
+	btn.MouseEnter:Connect(function()
+		if not page.Visible then
+			tw(tl, E.Fast, { TextColor3 = Theme.Text })
+		end
+	end)
+	btn.MouseLeave:Connect(function()
+		if not page.Visible then
+			tw(tl, E.Fast, { TextColor3 = Theme.Sub })
+		end
+	end)
+
+	if #self.tabs == 1 then
+		task.defer(function()
+			self._indicator.Position = UDim2.new(0, 0, 0, btn.Position.Y.Offset)
+			activate()
+		end)
+	end
+
+	return setmetatable({ _m = self, _page = page }, { __index = Matcha._Tab })
+end
+
+Matcha._Tab = {}
+
+function Matcha._Tab:Section(title)
+	local card = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 40),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Theme.Panel,
+		BorderSizePixel = 0,
+		Parent = self._page,
+	})
+	corner(10, card)
+	stroke(Theme.StrokeSoft, 1, 0, card)
+	pad(12, card)
+	local col = list(card, 8)
+	local head = label(title, 13, Theme.Text, Theme.FontBold, card)
+	head.Size = UDim2.new(1, 0, 0, 18)
+	head.LayoutOrder = -1
+	return setmetatable({ _m = self._m, _card = card }, { __index = Matcha._Section })
+end
+
+--==================================================================
+-- Widgets
+--==================================================================
+Matcha._Section = {}
+
+local function row(parent, h)
+	return new("Frame", {
+		Size = UDim2.new(1, 0, 0, h or 30),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+end
+
+function Matcha._Section:Label(text)
+	local l = label(text, 12, Theme.Sub, Theme.Font, self._card)
+	l.Size = UDim2.new(1, 0, 0, 16)
+	l.TextWrapped = true
+	l.AutomaticSize = Enum.AutomaticSize.Y
+	return l
+end
+
+function Matcha._Section:Toggle(o)
+	o = o or {}
+	local state = o.default or false
+	local r = row(self._card, 28)
+	local l = label(o.text or "Toggle", 13, Theme.Text, Theme.Font, r)
+	l.Size = UDim2.new(1, -50, 1, 0)
+
+	local track = new("TextButton", {
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.fromOffset(40, 22),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = state and Theme.Accent or Theme.Control,
+		BorderSizePixel = 0,
+		Parent = r,
+	})
+	corner(999, track)
+	stroke(Theme.StrokeSoft, 1, 0, track)
+	local knob = new("Frame", {
+		Size = UDim2.fromOffset(16, 16),
+		Position = state and UDim2.new(1, -3, 0.5, 0) or UDim2.new(0, 3, 0.5, 0),
+		AnchorPoint = Vector2.new(state and 1 or 0, 0.5),
+		BackgroundColor3 = state and Theme.Window or Theme.Sub,
+		BorderSizePixel = 0,
+		Parent = track,
+	})
+	corner(999, knob)
+
+	local api = {}
+	function api:Set(v)
+		state = v and true or false
+		tw(track, E.Smooth, { BackgroundColor3 = state and Theme.Accent or Theme.Control })
+		tw(knob, E.Snap, {
+			Position = state and UDim2.new(1, -3, 0.5, 0) or UDim2.new(0, 3, 0.5, 0),
+			AnchorPoint = Vector2.new(state and 1 or 0, 0.5),
+			BackgroundColor3 = state and Theme.Window or Theme.Sub,
+		})
+		if o.callback then
+			task.spawn(o.callback, state)
+		end
+	end
+	function api:Get()
+		return state
+	end
+	track.MouseButton1Click:Connect(function()
+		api:Set(not state)
+	end)
+	return api
+end
+
+function Matcha._Section:Button(o)
+	o = o or {}
+	local b = new("TextButton", {
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundColor3 = Theme.Control,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Parent = self._card,
+	})
+	corner(8, b)
+	stroke(Theme.StrokeSoft, 1, 0, b)
+	local l = label(o.text or "Button", 13, Theme.Text, Theme.Font, b)
+	l.Size = UDim2.fromScale(1, 1)
+	l.TextXAlignment = Enum.TextXAlignment.Center
+	hoverable(b, Theme.Control, Theme.Hover)
+	b.MouseButton1Click:Connect(function()
+		ripple(b)
+		if o.callback then
+			task.spawn(o.callback)
+		end
+	end)
+	return b
+end
+
+function Matcha._Section:Slider(o)
+	o = o or {}
+	local min, max = o.min or 0, o.max or 100
+	local step = o.step or 1
+	local decimals = o.decimals or 0
+	local value = math.clamp(o.default or min, min, max)
+
+	local r = row(self._card, 40)
+	local l = label(o.text or "Slider", 13, Theme.Text, Theme.Font, r)
+	l.Size = UDim2.new(1, -60, 0, 18)
+	local val = label(tostring(value), 12, Theme.Sub, Theme.FontMono, r)
+	val.Size = UDim2.new(0, 60, 0, 18)
+	val.Position = UDim2.new(1, -60, 0, 0)
+	val.TextXAlignment = Enum.TextXAlignment.Right
+
+	local track = new("TextButton", {
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.new(1, 0, 0, 6),
+		Position = UDim2.new(0, 0, 0, 28),
+		BackgroundColor3 = Theme.Control,
+		BorderSizePixel = 0,
+		Parent = r,
+	})
+	corner(999, track)
+	local fill = new("Frame", {
+		Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
+		BackgroundColor3 = Theme.Accent,
+		BorderSizePixel = 0,
+		Parent = track,
+	})
+	corner(999, fill)
+	local knob = new("Frame", {
+		Size = UDim2.fromOffset(12, 12),
+		Position = UDim2.new((value - min) / (max - min), 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.Text,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+		Parent = track,
+	})
+	corner(999, knob)
+	stroke(Theme.StrokeSoft, 1, 0, knob)
+
+	local function fmt(v)
+		if decimals > 0 then
+			return string.format("%." .. decimals .. "f", v)
+		end
+		return tostring(math.floor(v + 0.5))
+	end
+
+	local api = {}
+	local function apply(v, animate)
+		value = math.clamp(v, min, max)
+		value = math.floor(value / step + 0.5) * step
+		value = math.clamp(value, min, max)
+		local a = (value - min) / (max - min)
+		local info = animate and E.Fast or TweenInfo.new(0.03, Enum.EasingStyle.Linear)
+		tw(fill, info, { Size = UDim2.new(a, 0, 1, 0) })
+		tw(knob, info, { Position = UDim2.new(a, 0, 0.5, 0) })
+		val.Text = fmt(value)
+		if o.callback then
+			task.spawn(o.callback, value)
+		end
+	end
+	function api:Set(v)
+		apply(v, true)
+	end
+	function api:Get()
+		return value
+	end
+
+	local dragging = false
+	local function fromX(px)
+		local a = math.clamp((px - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+		apply(min + a * (max - min), false)
+	end
+	track.MouseButton1Down:Connect(function()
+		dragging = true
+		fromX(UserInput:GetMouseLocation().X)
+	end)
+	UserInput.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+	UserInput.InputChanged:Connect(function(i)
+		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			fromX(UserInput:GetMouseLocation().X)
+		end
+	end)
+	return api
+end
+
+function Matcha._Section:Dropdown(o)
+	o = o or {}
+	local items = o.options or {}
+	local value = o.default or items[1]
+	local open = false
+
+	local holder = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Parent = self._card,
+	})
+	local head = new("TextButton", {
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundColor3 = Theme.Control,
+		BorderSizePixel = 0,
+		Parent = holder,
+	})
+	corner(8, head)
+	stroke(Theme.StrokeSoft, 1, 0, head)
+	local l = label((o.text and o.text .. ":  " or "") .. tostring(value), 13, Theme.Text, Theme.Font, head)
+	l.Position = UDim2.new(0, 10, 0, 0)
+	l.Size = UDim2.new(1, -34, 1, 0)
+	local arrow = label("▾", 12, Theme.Sub, Theme.Font, head)
+	arrow.Position = UDim2.new(1, -22, 0, 0)
+	arrow.Size = UDim2.fromOffset(16, 30)
+	arrow.TextXAlignment = Enum.TextXAlignment.Center
+
+	local body = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		Position = UDim2.new(0, 0, 0, 34),
+		BackgroundColor3 = Theme.Card,
+		BorderSizePixel = 0,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		Parent = holder,
+	})
+	corner(8, body)
+	stroke(Theme.StrokeSoft, 1, 0, body)
+	pad(4, body)
+	list(body, 3)
+
+	local api = {}
+	function api:Get()
+		return value
+	end
+	function api:Set(v)
+		value = v
+		l.Text = (o.text and o.text .. ":  " or "") .. tostring(value)
+		if o.callback then
+			task.spawn(o.callback, value)
+		end
+	end
+
+	local function rebuild()
+		for _, c in ipairs(body:GetChildren()) do
+			if c:IsA("TextButton") then
+				c:Destroy()
+			end
+		end
+		for _, it in ipairs(items) do
+			local opt = new("TextButton", {
+				Text = "",
+				AutoButtonColor = false,
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundColor3 = Theme.Control,
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Parent = body,
+			})
+			corner(6, opt)
+			local ol = label(tostring(it), 12, it == value and Theme.Text or Theme.Sub, Theme.Font, opt)
+			ol.Position = UDim2.new(0, 8, 0, 0)
+			ol.Size = UDim2.new(1, -8, 1, 0)
+			opt.MouseEnter:Connect(function()
+				tw(opt, E.Fast, { BackgroundTransparency = 0, BackgroundColor3 = Theme.Hover })
+			end)
+			opt.MouseLeave:Connect(function()
+				tw(opt, E.Fast, { BackgroundTransparency = 1 })
+			end)
+			opt.MouseButton1Click:Connect(function()
+				api:Set(it)
+				open = false
+				body.Visible = false
+				tw(arrow, E.Fast, { Rotation = 0 })
+				rebuild()
+			end)
+		end
+	end
+
+	head.MouseButton1Click:Connect(function()
+		open = not open
+		if open then
+			rebuild()
+			body.Visible = true
+			tw(arrow, E.Fast, { Rotation = 180 })
+		else
+			body.Visible = false
+			tw(arrow, E.Fast, { Rotation = 0 })
+		end
+	end)
+	hoverable(head, Theme.Control, Theme.Hover)
+	function api:SetItems(t)
+		items = t
+		rebuild()
+	end
+	return api
+end
+
+function Matcha._Section:Keybind(o)
+	o = o or {}
+	local key = o.default
+	local capturing = false
+	local r = row(self._card, 28)
+	local l = label(o.text or "Keybind", 13, Theme.Text, Theme.Font, r)
+	l.Size = UDim2.new(1, -80, 1, 0)
+	local b = new("TextButton", {
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.fromOffset(76, 24),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = Theme.Control,
+		BorderSizePixel = 0,
+		Parent = r,
+	})
+	corner(7, b)
+	stroke(Theme.StrokeSoft, 1, 0, b)
+	local bl = label(key and key.Name or "None", 12, Theme.Sub, Theme.FontMono, b)
+	bl.Size = UDim2.fromScale(1, 1)
+	bl.TextXAlignment = Enum.TextXAlignment.Center
+
+	b.MouseButton1Click:Connect(function()
+		capturing = true
+		bl.Text = "..."
+		tw(b, E.Fast, { BackgroundColor3 = Theme.Hover })
+	end)
+	UserInput.InputBegan:Connect(function(i, gp)
+		if capturing and not gp then
+			capturing = false
+			tw(b, E.Fast, { BackgroundColor3 = Theme.Control })
+			if i.KeyCode == Enum.KeyCode.Escape then
+				key = nil
+				bl.Text = "None"
+			elseif i.KeyCode ~= Enum.KeyCode.Unknown then
+				key = i.KeyCode
+				bl.Text = key.Name
+			end
+			return
+		end
+		if key and not gp and i.KeyCode == key and o.callback then
+			task.spawn(o.callback, key)
+		end
+	end)
+	return { Get = function() return key end }
+end
+
+function Matcha._Section:Textbox(o)
+	o = o or {}
+	local r = row(self._card, 30)
+	local box = new("TextBox", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Theme.Control,
+		BorderSizePixel = 0,
+		Text = o.default or "",
+		PlaceholderText = o.placeholder or "",
+		PlaceholderColor3 = Theme.Muted,
+		TextColor3 = Theme.Text,
+		Font = Theme.Font,
+		TextSize = 13,
+		ClearTextOnFocus = false,
+		Parent = r,
+	})
+	corner(8, box)
+	stroke(Theme.StrokeSoft, 1, 0, box)
+	pad(0, box, 10, 0, 10, 0)
+	box.Focused:Connect(function()
+		tw(box.UIStroke, E.Fast, { Color = Theme.Accent })
+	end)
+	box.FocusLost:Connect(function(enter)
+		tw(box.UIStroke, E.Fast, { Color = Theme.StrokeSoft })
+		if enter and o.callback then
+			task.spawn(o.callback, box.Text)
+		end
+	end)
+	return box
+end
+
+function Matcha._Section:Colorpicker(o)
+	o = o or {}
+	local color = o.default or Theme.Accent
+	local r = row(self._card, 28)
+	local l = label(o.text or "Color", 13, Theme.Text, Theme.Font, r)
+	l.Size = UDim2.new(1, -40, 1, 0)
+	local swatch = new("TextButton", {
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.fromOffset(34, 20),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Parent = r,
+	})
+	corner(6, swatch)
+	stroke(Theme.StrokeSoft, 1, 0, swatch)
+
+	-- minimalist hue+value popup
+	local pop = new("Frame", {
+		Size = UDim2.fromOffset(180, 150),
+		Position = UDim2.new(1, 0, 1, 6),
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundColor3 = Theme.Card,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 30,
+		Parent = swatch,
+	})
+	corner(8, pop)
+	stroke(Theme.Stroke, 1, 0, pop)
+	pad(8, pop)
+	local sat = new("ImageButton", {
+		Size = UDim2.new(1, 0, 1, -28),
+		BackgroundColor3 = Color3.fromHSV(0, 1, 1),
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		ZIndex = 31,
+		Parent = pop,
+	})
+	corner(6, sat)
+	new("UIGradient", { Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.new(1, 1, 1)), Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) }), Parent = sat })
+	local satDark = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 0, BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 31, Parent = sat })
+	corner(6, satDark)
+	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) }), Parent = satDark })
+	local hueBar = new("ImageButton", {
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.new(0, 0, 1, -20),
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		ZIndex = 31,
+		Parent = pop,
+	})
+	corner(6, hueBar)
+	new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromHSV(0, 1, 1)),
+			ColorSequenceKeypoint.new(0.17, Color3.fromHSV(0.17, 1, 1)),
+			ColorSequenceKeypoint.new(0.33, Color3.fromHSV(0.33, 1, 1)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromHSV(0.5, 1, 1)),
+			ColorSequenceKeypoint.new(0.67, Color3.fromHSV(0.67, 1, 1)),
+			ColorSequenceKeypoint.new(0.83, Color3.fromHSV(0.83, 1, 1)),
+			ColorSequenceKeypoint.new(1, Color3.fromHSV(1, 1, 1)),
+		}),
+		Parent = hueBar,
+	})
+
+	local h, s, v = Color3.toHSV(color)
+	local function refresh()
+		color = Color3.fromHSV(h, s, v)
+		swatch.BackgroundColor3 = color
+		sat.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+		if o.callback then
+			task.spawn(o.callback, color)
+		end
+	end
+	local draggingSat, draggingHue
+	sat.MouseButton1Down:Connect(function() draggingSat = true end)
+	hueBar.MouseButton1Down:Connect(function() draggingHue = true end)
+	UserInput.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			draggingSat, draggingHue = false, false
+		end
+	end)
+	UserInput.InputChanged:Connect(function(i)
+		if i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		local m = UserInput:GetMouseLocation()
+		if draggingSat then
+			s = math.clamp((m.X - sat.AbsolutePosition.X) / sat.AbsoluteSize.X, 0, 1)
+			v = 1 - math.clamp((m.Y - sat.AbsolutePosition.Y) / sat.AbsoluteSize.Y, 0, 1)
+			refresh()
+		elseif draggingHue then
+			h = math.clamp((m.X - hueBar.AbsolutePosition.X) / hueBar.AbsoluteSize.X, 0, 1)
+			refresh()
+		end
+	end)
+
+	swatch.MouseButton1Click:Connect(function()
+		pop.Visible = not pop.Visible
+	end)
+	return { Get = function() return color end, Set = function(_, c) h, s, v = Color3.toHSV(c); refresh() end }
+end
+
+--==================================================================
+-- Toasts / notifications
+--==================================================================
+function Matcha:Notify(o)
+	o = o or {}
+	local dur = o.duration or 4
+	local kindColor = ({ ok = Theme.Good, warn = Theme.Warn, error = Theme.Bad })[o.kind] or Theme.Accent
+
+	if not self._toastHolder then
+		self._toastHolder = new("Frame", {
+			Size = UDim2.new(0, 280, 1, -32),
+			Position = UDim2.new(1, -16, 1, -16),
+			AnchorPoint = Vector2.new(1, 1),
+			BackgroundTransparency = 1,
+			Parent = self.gui,
+		})
+		local ll = list(self._toastHolder, 8)
+		ll.VerticalAlignment = Enum.VerticalAlignment.Bottom
+		ll.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	end
+
+	local card = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 56),
+		BackgroundColor3 = Theme.Panel,
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, 300, 0, 0),
+		Parent = self._toastHolder,
+	})
+	corner(10, card)
+	stroke(Theme.Stroke, 1, 0.05, card)
+	pad(10, card, 14, 10, 12, 10)
+	local accentBar = new("Frame", {
+		Size = UDim2.new(0, 3, 1, -16),
+		Position = UDim2.new(0, 4, 0, 8),
+		BackgroundColor3 = kindColor,
+		BorderSizePixel = 0,
+		Parent = card,
+	})
+	corner(999, accentBar)
+	local t = label(o.title or "Notice", 13, Theme.Text, Theme.FontBold, card)
+	t.Position = UDim2.new(0, 6, 0, 0)
+	t.Size = UDim2.new(1, -6, 0, 18)
+	local msg = label(o.text or "", 12, Theme.Sub, Theme.Font, card)
+	msg.Position = UDim2.new(0, 6, 0, 18)
+	msg.Size = UDim2.new(1, -6, 0, 16)
+	msg.TextWrapped = true
+	local prog = new("Frame", {
+		Size = UDim2.new(1, -12, 0, 2),
+		Position = UDim2.new(0, 6, 1, -6),
+		BackgroundColor3 = kindColor,
+		BackgroundTransparency = 0.3,
+		BorderSizePixel = 0,
+		Parent = card,
+	})
+	corner(999, prog)
+
+	tw(card, E.Pop, { Position = UDim2.new(1, 0, 0, 0) })
+	tw(prog, TweenInfo.new(dur, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 2) })
+	task.delay(dur, function()
+		local out = tw(card, E.Smooth, { Position = UDim2.new(1, 320, 0, 0), BackgroundTransparency = 1 })
+		out.Completed:Connect(function()
+			card:Destroy()
+		end)
+	end)
+end
+
+--==================================================================
+-- ESP Preview (viewport with a rig + overlay box)
+--==================================================================
+function Matcha:ESPPreview(opts)
+	opts = opts or {}
+	local w, h = 220, 300
+	local win = new("Frame", {
+		Size = UDim2.fromOffset(w, h),
+		Position = UDim2.new(0.5, 200, 0.5, -h / 2),
+		BackgroundColor3 = Theme.Window,
+		BorderSizePixel = 0,
+		Parent = self.gui,
+	})
+	corner(12, win)
+	stroke(Theme.Stroke, 1, 0.2, win)
+	local bar = new("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, Parent = win })
+	draggable(bar, win)
+	local t = label((self.title or "Matcha") .. " — ESP Preview", 12, Theme.Sub, Theme.FontMono, bar)
+	t.Position = UDim2.new(0, 14, 0, 0)
+	t.Size = UDim2.new(1, -20, 1, 0)
+
+	local vpHolder = new("Frame", {
+		Size = UDim2.new(1, -20, 1, -46),
+		Position = UDim2.new(0, 10, 0, 38),
+		BackgroundColor3 = Color3.fromRGB(10, 10, 12),
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Parent = win,
+	})
+	corner(10, vpHolder)
+	stroke(Theme.StrokeSoft, 1, 0, vpHolder)
+
+	local vp = new("ViewportFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Ambient = Color3.fromRGB(200, 200, 200),
+		LightColor = Color3.fromRGB(255, 255, 255),
+		Parent = vpHolder,
+	})
+	local cam = new("Camera", { Parent = vp })
+	vp.CurrentCamera = cam
+
+	-- simple blocky avatar
+	local model = new("Model", { Parent = vp })
+	local function part(size, pos, color)
+		local p = new("Part", {
+			Size = size,
+			Color = color or Color3.fromRGB(210, 210, 215),
+			Material = Enum.Material.SmoothPlastic,
+			Anchored = true,
+			CanCollide = false,
+			Parent = model,
+		})
+		p.CFrame = CFrame.new(pos)
+		return p
+	end
+	local torso = part(Vector3.new(2, 2, 1), Vector3.new(0, 0, 0), Color3.fromRGB(225, 205, 215))
+	part(Vector3.new(1.2, 1.2, 1.2), Vector3.new(0, 1.7, 0), Color3.fromRGB(240, 225, 230)) -- head
+	part(Vector3.new(0.8, 2, 0.8), Vector3.new(-1.4, 0, 0)) -- arm L
+	part(Vector3.new(0.8, 2, 0.8), Vector3.new(1.4, 0, 0)) -- arm R
+	part(Vector3.new(0.9, 2, 0.9), Vector3.new(-0.5, -2, 0), Color3.fromRGB(60, 60, 66)) -- leg L
+	part(Vector3.new(0.9, 2, 0.9), Vector3.new(0.5, -2, 0), Color3.fromRGB(60, 60, 66)) -- leg R
+	model.PrimaryPart = torso
+
+	-- overlay ESP box + name + healthbar
+	local box = new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(76, 150),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Parent = vpHolder,
+	})
+	stroke(Theme.Accent, 1.5, 0, box)
+	corner(3, box)
+	local name = label("Player", 11, Theme.Text, Theme.FontBold, vpHolder)
+	name.Size = UDim2.fromOffset(120, 14)
+	name.AnchorPoint = Vector2.new(0.5, 1)
+	name.TextXAlignment = Enum.TextXAlignment.Center
+	local hp = new("Frame", {
+		Size = UDim2.fromOffset(3, 150),
+		BackgroundColor3 = Theme.Good,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Parent = vpHolder,
+	})
+	corner(999, hp)
+
+	-- animate rotation + keep overlay glued to the box, breathe the hp bar
+	local angle = 0
+	RunService.RenderStepped:Connect(function(dt)
+		if not vp.Parent then
+			return
+		end
+		angle += dt * 0.6
+		model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0) * CFrame.Angles(0, angle, 0))
+		cam.CFrame = CFrame.new(Vector3.new(0, 0.2, 8), Vector3.new(0, -0.2, 0))
+		local by = box.AbsoluteSize
+		name.Position = UDim2.fromOffset(
+			box.AbsolutePosition.X - vpHolder.AbsolutePosition.X + by.X / 2,
+			box.AbsolutePosition.Y - vpHolder.AbsolutePosition.Y - 2
+		)
+		hp.Position = UDim2.fromOffset(
+			box.AbsolutePosition.X - vpHolder.AbsolutePosition.X - 4,
+			box.AbsolutePosition.Y - vpHolder.AbsolutePosition.Y + by.Y / 2
+		)
+		local pct = (math.sin(angle * 1.5) * 0.5 + 0.5)
+		hp.Size = UDim2.fromOffset(3, by.Y)
+		hp.BackgroundColor3 = Theme.Bad:Lerp(Theme.Good, pct)
+	end)
+
+	return win
+end
+
+--==================================================================
+-- DEMO — runs on execute
+--==================================================================
+local function demo()
+	local UI = Matcha.new({ title = "Matcha", toggleKey = Enum.KeyCode.RightShift })
+
+	-- Aiming
+	do
+		local tab = UI:Tab("Aiming")
+		local aim = tab:Section("Aimbot")
+		aim:Toggle({ text = "Enabled", default = true, callback = function() end })
+		aim:Dropdown({ text = "Hit Part", options = { "Head", "Torso", "Nearest" }, default = "Head" })
+		aim:Slider({ text = "Smoothing", min = 0, max = 100, default = 45 })
+		aim:Slider({ text = "FOV", min = 0, max = 500, default = 120 })
+		aim:Keybind({ text = "Aim Key", default = Enum.KeyCode.E })
+		local extra = tab:Section("Prediction")
+		extra:Toggle({ text = "Resolver" })
+		extra:Slider({ text = "Bullet Drop", min = 0, max = 5, step = 0.05, decimals = 2, default = 1.2 })
+	end
+
+	-- Visuals
+	do
+		local tab = UI:Tab("Visuals")
+		local box = tab:Section("Players")
+		box:Toggle({ text = "Box ESP", default = true })
+		box:Toggle({ text = "Name" })
+		box:Toggle({ text = "Health Bar", default = true })
+		box:Toggle({ text = "Skeleton" })
+		box:Colorpicker({ text = "Box Color", default = Color3.fromRGB(236, 236, 240) })
+		local ch = tab:Section("Chams")
+		ch:Toggle({ text = "Enabled" })
+		ch:Dropdown({ text = "Material", options = { "ForceField", "Neon", "Glass" }, default = "ForceField" })
+		ch:Colorpicker({ text = "Fill", default = Color3.fromRGB(240, 190, 210) })
+	end
+
+	-- World
+	do
+		local tab = UI:Tab("World")
+		local w = tab:Section("Environment")
+		w:Toggle({ text = "Fullbright" })
+		w:Slider({ text = "Brightness", min = 0, max = 5, step = 0.1, decimals = 1, default = 2 })
+		w:Toggle({ text = "No Fog", default = true })
+		w:Textbox({ text = "Waypoint", placeholder = "name..." })
+		w:Button({ text = "Create Waypoint", callback = function()
+			UI:Notify({ title = "Waypoint", text = "Saved current position", kind = "ok" })
+		end })
+	end
+
+	-- Config
+	do
+		local tab = UI:Tab("Config")
+		local c = tab:Section("Theme")
+		c:Colorpicker({ text = "Accent", default = Theme.Accent, callback = function(col)
+			Theme.Accent = col
+		end })
+		c:Slider({ text = "UI Scale", min = 80, max = 120, default = 100 })
+		local a = tab:Section("Actions")
+		a:Button({ text = "Notify Test", callback = function()
+			UI:Notify({ title = "Matcha", text = "This is a toast notification.", kind = "ok" })
+		end })
+		a:Button({ text = "Warn Test", callback = function()
+			UI:Notify({ title = "Careful", text = "Something might be off.", kind = "warn" })
+		end })
+	end
+
+	UI:ESPPreview()
+	task.delay(0.4, function()
+		UI:Notify({ title = "Matcha", text = "UI loaded. Press RightShift to toggle.", kind = "ok", duration = 5 })
+	end)
+
+	return UI
+end
+
+demo()
+return Matcha
