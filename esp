@@ -817,10 +817,17 @@ end
 
 function Pool:get(key, kind)
     local d = self.bank[key]
+    if d and (not self.sh[key] or self.sh[key].kind ~= kind) then
+        pcall(function()
+            d:Destroy()
+        end)
+        d = nil
+        self.size = max(0, self.size - 1)
+    end
     if not d then
         d = new(kind)
         self.bank[key] = d
-        self.sh[key] = {}
+        self.sh[key] = { kind = kind }
         self.size = self.size + 1
     end
     self.live[key] = true
@@ -856,6 +863,15 @@ function Pool:finish()
     end
     for k in pairs(self.live) do
         self.prev[k] = true
+    end
+end
+
+function Pool:carry(prefix)
+    local n = #prefix
+    for k in pairs(self.prev) do
+        if not self.live[k] and k:sub(1, n) == prefix then
+            self.live[k] = true
+        end
     end
 end
 
@@ -1643,13 +1659,13 @@ function ESP:_snap()
 
                     local sx, sy, depth, on = self._proj(root.Position)
                     local bx, by, bw, bh
-                    if on and depth > 0 and (self:_turn(r.uid, boxStep, 2) or not r.box) then
+                    if depth > 0 and (self:_turn(r.uid, boxStep, 2) or not r.box) then
                         r.pivot, r.size = characterBox(char, root)
                         bx, by, bw, bh = box2d(r.pivot, r.size, self._proj)
                         if bx then
                             r.box = { bx, by, bw, bh }
-                        else
-                            r.box = nil
+                        elseif r.box then
+                            bx, by, bw, bh = r.box[1], r.box[2], r.box[3], r.box[4]
                         end
                     elseif r.box then
                         bx, by, bw, bh = r.box[1], r.box[2], r.box[3], r.box[4]
@@ -1764,19 +1780,19 @@ function ESP:_snapNPC(out, eye)
                             self:_markHit(rec, floor(rec.hp0 - hp + 0.5))
                         end
                         rec.hp0 = hp
-                        if needVis then
+                        if needVis and (self:_turn(rec.uid, npcBoxStep, 23) or rec.vis == nil) then
                             rec.vis = self:_canSee(model, ncfg.vis.points)
                         end
                         local sx, sy, depth, on = self._proj(rootPart.Position)
                         local bx, by, bw, bh
-                        if on and depth > 0 and (self:_turn(rec.uid, npcBoxStep, 17) or not rec.box) then
+                        if depth > 0 and (self:_turn(rec.uid, npcBoxStep, 17) or not rec.box) then
                             local pivot, size = model:GetBoundingBox()
                             rec.pivot, rec.size = pivot, size
                             bx, by, bw, bh = box2d(pivot, size, self._proj)
                             if bx then
                                 rec.box = { bx, by, bw, bh }
-                            else
-                                rec.box = nil
+                            elseif rec.box then
+                                bx, by, bw, bh = rec.box[1], rec.box[2], rec.box[3], rec.box[4]
                             end
                         elseif rec.box then
                             bx, by, bw, bh = rec.box[1], rec.box[2], rec.box[3], rec.box[4]
@@ -1912,9 +1928,9 @@ function ESP:_ring(key, pos, spec, lod)
         local p = pos + v3(cos(ang) * spec.rad, 0, sin(ang) * spec.rad)
         local x, y, d = self._proj(p)
         if prevX and prevD > 0 and d > 0 and (i % step == 0) then
-            self.pool:line(key .. i, prevX, prevY, x, y, c, spec.w or 1, a)
+            self.pool:line(key .. "_" .. i, prevX, prevY, x, y, c, spec.w or 1, a)
             if spec.glow then
-                self.pool:line(key .. "g" .. i, prevX, prevY, x, y, c, (spec.w or 1) + 2, a * 0.25)
+                self.pool:line(key .. "g_" .. i, prevX, prevY, x, y, c, (spec.w or 1) + 2, a * 0.25)
             end
         end
         pts[i + 1] = { x, y, d }
@@ -1927,7 +1943,7 @@ function ESP:_ring(key, pos, spec, lod)
                 local a0 = pts[i]
                 local b0 = pts[(i % sides) + 1]
                 if a0 and b0 and a0[3] > 0 and b0[3] > 0 then
-                    self.pool:tri(key .. "f" .. i, cx, cy, a0[1], a0[2], b0[1], b0[2], c, spec.fillA or 0.05)
+                    self.pool:tri(key .. "f_" .. i, cx, cy, a0[1], a0[2], b0[1], b0[2], c, spec.fillA or 0.05)
                 end
             end
         end
@@ -1937,7 +1953,7 @@ function ESP:_ring(key, pos, spec, lod)
             local ang = (i / spec.ticks) * TAU + spin
             local p0 = pos + v3(cos(ang) * spec.rad, 0, sin(ang) * spec.rad)
             local p1 = pos + v3(cos(ang) * (spec.rad + (spec.tickLen or 0.8)), 0, sin(ang) * (spec.rad + (spec.tickLen or 0.8)))
-            self:_lineW(key .. "t" .. i, p0, p1, c, spec.w or 1, a)
+            self:_lineW(key .. "t_" .. i, p0, p1, c, spec.w or 1, a)
         end
     end
 end
@@ -1951,7 +1967,7 @@ function ESP:_bones(s, c)
             local ax, ay, ad = self._proj(a.Position)
             local bx, by, bd = self._proj(b.Position)
             if ad > 0 and bd > 0 then
-                self.pool:line("b" .. s.uid .. i, ax, ay, bx, by, c, (s.cfg or self.cfg).bones.w, 1)
+                self.pool:line("b" .. s.uid .. "_" .. i, ax, ay, bx, by, c, (s.cfg or self.cfg).bones.w, 1)
             end
         end
     end
@@ -1977,11 +1993,11 @@ function ESP:_flagsDraw(s, x, y, w)
                 local tc = out[2] or cfg.col
                 local width = fontSizeWidth(txt, cfg.size)
                 local tx = right and col or col - width
-                local d = self.pool:txt("f" .. s.uid .. i, txt, tx, row, cfg.size, tc, false, FONT, true)
+                local d = self.pool:txt("f" .. s.uid .. "_" .. i, txt, tx, row, cfg.size, tc, false, FONT, true)
                 if d and not right then
                     local bounds = d.TextBounds and d.TextBounds.X or width
                     if abs(bounds - width) > 1 then
-                        self.pool:txt("f" .. s.uid .. i, txt, col - bounds, row, cfg.size, tc, false, FONT, true)
+                        self.pool:txt("f" .. s.uid .. "_" .. i, txt, col - bounds, row, cfg.size, tc, false, FONT, true)
                     end
                 end
                 row = row + cfg.size + cfg.gap
@@ -2002,27 +2018,25 @@ function ESP:_boxDraw(s, c, a)
         self._pts = pts
         for i = 1, 8 do
             local px, py, d = self._proj((s.pivot * cf(CORNERS[i] * half)).Position)
-            if d <= 0 then
-                return
-            end
-            pts[i] = { px, py }
+            pts[i] = d > 0 and { px, py } or false
         end
         local edges = {
             {1,2},{2,3},{3,4},{4,1},{5,6},{6,7},{7,8},{8,5},{1,5},{2,6},{3,7},{4,8},
         }
         for i, e in ipairs(edges) do
             local p0, p1 = pts[e[1]], pts[e[2]]
-            if b.kind == "3dcorner" then
+            if not p0 or not p1 then
+            elseif b.kind == "3dcorner" then
                 local dx, dy = p1[1] - p0[1], p1[2] - p0[2]
                 local len = sqrt(dx * dx + dy * dy)
                 if len > 0 then
                     local ux, uy = dx / len, dy / len
                     local q = len * 0.25
-                    self.pool:line("bo" .. s.uid .. i, p0[1], p0[2], p0[1] + ux * q, p0[2] + uy * q, c, b.w, a)
-                    self.pool:line("bf" .. s.uid .. i, p1[1], p1[2], p1[1] - ux * q, p1[2] - uy * q, c, b.w, a)
+                    self.pool:line("bo" .. s.uid .. "_" .. i, p0[1], p0[2], p0[1] + ux * q, p0[2] + uy * q, c, b.w, a)
+                    self.pool:line("bf" .. s.uid .. "_" .. i, p1[1], p1[2], p1[1] - ux * q, p1[2] - uy * q, c, b.w, a)
                 end
             else
-                self.pool:line("be" .. s.uid .. i, p0[1], p0[2], p1[1], p1[2], c, b.w, a)
+                self.pool:line("be" .. s.uid .. "_" .. i, p0[1], p0[2], p1[1], p1[2], c, b.w, a)
             end
         end
         return
@@ -2047,9 +2061,9 @@ function ESP:_boxDraw(s, c, a)
         for i = 1, 8 do
             local o = (i - 1) * 4
             if b.outline then
-                self.pool:line("co" .. s.uid .. i, seg[o + 1], seg[o + 2], seg[o + 3], seg[o + 4], BLACK, b.w + 1, a)
+                self.pool:line("co" .. s.uid .. "_" .. i, seg[o + 1], seg[o + 2], seg[o + 3], seg[o + 4], BLACK, b.w + 1, a)
             end
-            self.pool:line("c" .. s.uid .. i, seg[o + 1], seg[o + 2], seg[o + 3], seg[o + 4], c, b.w, a)
+            self.pool:line("c" .. s.uid .. "_" .. i, seg[o + 1], seg[o + 2], seg[o + 3], seg[o + 4], c, b.w, a)
         end
     else
         if b.outline then
@@ -2159,7 +2173,7 @@ function ESP:_player(s)
     if cfg.vis.hide and s.vis == false then
         return
     end
-    if not s.on or s.depth <= 0 or not s.bx then
+    if s.depth <= 0 or not s.bx then
         return
     end
     if cfg.espRange > 0 and s.dist > cfg.espRange then
@@ -2190,7 +2204,7 @@ function ESP:_player(s)
 
     if cfg.rings.on and cfg.rings.enemies and s.foot then
         for i, spec in ipairs(cfg.rings.specs) do
-            self:_ring("rg" .. s.uid .. i, s.foot, spec, s.lod)
+            self:_ring("rg" .. s.uid .. "_" .. i, s.foot, spec, s.lod)
         end
     end
 
@@ -2220,10 +2234,10 @@ function ESP:_arrow(s)
     if root.team and s.ally then
         return
     end
-    if s.on and s.depth > 0 then
+    local vp = cam.ViewportSize
+    if s.depth > 0 and s.bx and s.bx + s.bw > 0 and s.by + s.bh > 0 and s.bx < vp.X and s.by < vp.Y then
         return
     end
-    local vp = cam.ViewportSize
     local cx, cy = vp.X * 0.5, vp.Y * 0.5
     local sx, sy = s.sx, s.sy
     if s.depth < 0 then
@@ -2606,7 +2620,10 @@ function ESP:_ents()
         return
     end
     local entityStep = max(1, tonumber(self.cfg.perf.entityStep) or 3)
-    if self.frame % entityStep ~= 0 then return end
+    if self.frame % entityStep ~= 0 then
+        self.pool:carry("e")
+        return
+    end
     local eye = cam.CFrame.Position
     local vp = cam.ViewportSize
 
@@ -2903,10 +2920,8 @@ function ESP:tick(dt)
 
     for i = 1, #self.snap do
         local s = self.snap[i]
-        if not s.npc or self.frame % npcFrameSkip == 0 then
-            self.pool.zbias = pri and ((s.npc and (pri.walker or 4) or (pri.player or 5)) * scale) or 0
-            self:_player(s)
-        end
+        self.pool.zbias = pri and ((s.npc and (pri.walker or 4) or (pri.player or 5)) * scale) or 0
+        self:_player(s)
     end
 
     self.pool.zbias = pri and ((pri.hud or 9) * scale) or 0
@@ -2949,7 +2964,7 @@ function ESP:start()
         if not ok then
             self._tickErrors=(self._tickErrors or 0)+1
             if self._tickErrors==1 then warn("[EasyESP]",err) end
-            self.pool:reset()
+            self.pool:finish()
         else
             self._tickErrors=0
         end
